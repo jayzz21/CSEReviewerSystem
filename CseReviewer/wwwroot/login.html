@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in · Husay</title><link rel="stylesheet" href="/app.css"><script src="/login.js?v=username-1" defer></script></head>
+<body class="bg-slate-50 text-slate-800">
+<main class="max-w-6xl mx-auto p-6 lg:p-12">
+  <a href="/" class="text-3xl font-bold text-teal-800">h. husay</a>
+  <div class="grid md:grid-cols-2 gap-7 mt-9">
+    <section class="p-6"><p class="eyebrow">YOUR NEXT CHAPTER</p><h1 class="text-3xl font-bold mt-4">A little practice.<br>A brighter future.</h1><p class="text-slate-500 leading-7 mt-6">Sign in to keep your reviewer sets and study progress together, wherever you practice.</p><p class="mt-6">Your answers and progress belong to your account.</p></section>
+    <section class="panel p-6 md:p-8">
+      <h2 id="auth-title" class="text-2xl font-bold">Welcome back</h2>
+      <p id="auth-message" class="mt-4 text-sm" role="status" aria-live="polite"></p>
+      <form id="login-form" class="space-y-4 mt-6">
+        <label class="block">Username<input id="login-name" autocomplete="username" required maxlength="254"></label>
+        <label class="block">Password<input id="login-password" type="password" autocomplete="current-password" required maxlength="128"></label>
+        <button class="primary" type="submit">Sign in →</button>
+      </form>
+      <form id="register-form" class="space-y-4 mt-6 hidden">
+        <label class="block">Username<input id="register-name" autocomplete="username" pattern="[A-Za-z0-9_]{3,30}" minlength="3" maxlength="30" required><span class="text-xs text-slate-500">3–30 letters, numbers or underscores.</span></label>
+        <label class="block">Password<input id="register-password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required><span class="text-xs text-slate-500">At least 12 characters.</span></label>
+        <button class="primary" type="submit">Create account</button>
+      </form>
+      <form id="change-form" class="space-y-4 mt-6 hidden">
+        <p>Replace your temporary password before continuing.</p>
+        <label class="block">Current password<input id="current-password" type="password" autocomplete="current-password" required maxlength="128"></label>
+        <label class="block">New password<input id="new-password" type="password" autocomplete="new-password" required minlength="12" maxlength="128"></label>
+        <button class="primary" type="submit">Update password</button>
+      </form>
+      <div id="auth-options" class="space-y-4 mt-6">
+        <button id="toggle-register" type="button" class="text-teal-800 underline">New here? Create an account</button>
+      </div>
+    </section>
+  </div>
+</main></body></html>

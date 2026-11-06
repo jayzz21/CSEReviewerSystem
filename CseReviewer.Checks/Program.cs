@@ -102,6 +102,10 @@ foreach (var cat in Catalog.Categories) {
     }
     Console.WriteLine($"PASS: QuestionBank reviewer bank for {cat} (5, 10, 20, 30 items verified)");
 }
+var mockReq = new GenerateRequest("All 4 Subjects (Final Mock Exam)", "Professional", "Easy", 180, "", "sample");
+var mockRes = QuestionBank.Create(mockReq);
+if (mockRes.Count != 180) throw new Exception($"Expected 180 mock exam items, got {mockRes.Count}");
+Console.WriteLine("PASS: 180 questions Final Mock Exam in sample mode");
 class RetryProvider(HttpStatusCode firstStatus, string success) : HttpMessageHandler {
     public int Calls { get; private set; }
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) {

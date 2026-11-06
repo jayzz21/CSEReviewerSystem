@@ -2,10 +2,12 @@
 const $ = id => document.getElementById(id);
 
 const categories = [
+  'All 4 Subjects (Final Mock Exam)',
   'Numerical Ability', 'Verbal Ability',
   'Analytical Ability', 'Clerical Ability', 'General Information'
 ];
 const hints = [
+  'Comprehensive 180-item exam covering all 4 subjects',
   'Numbers, patterns & word problems',
   'Words, grammar & comprehension',
   'Logic, analogies & conclusions',
@@ -47,6 +49,8 @@ async function api(path, data) {
   let body;
   try { body = text ? JSON.parse(text) : null; } catch { body = null; }
 
+  if (response.status === 401) location.replace('/login.html');
+  if (body?.code === 'password_change_required') location.replace('/login.html?changePassword=1');
   if (!response.ok) {
     throw new Error(
       body?.error ||
@@ -99,13 +103,20 @@ function renderCategories() {
             class="subject ${c === category ? 'selected' : ''}"
             aria-pressed="${c === category}"
             data-category="${c}">
-      <strong>${c}</strong>
-      <span class="block text-xs text-slate-500 mt-2">${hints[categories.indexOf(c)]}</span>
+      <strong>${escapeHtml(c)}</strong>
+      <span class="block text-xs text-slate-500 mt-2">${escapeHtml(hints[categories.indexOf(c)])}</span>
     </button>`
   ).join('');
 
   $('categories').querySelectorAll('button').forEach(b =>
-    b.onclick = () => { category = b.dataset.category; renderCategories(); }
+    b.onclick = () => {
+      category = b.dataset.category;
+      if (category === 'All 4 Subjects (Final Mock Exam)') {
+        $('count').value = '180';
+      }
+      renderCategories();
+      modeChanged();
+    }
   );
 }
 
@@ -113,30 +124,34 @@ function renderCategories() {
 function modeChanged() {
   const sample = $('mode').value === 'sample';
   const bank = $('mode').value === 'bank';
-  // Focus is only for AI prompting; count is always available (5, 10, 20, 30)
+  const ai = $('mode').value === 'ai';
+
   $('focus').disabled = sample || bank;
   $('difficulty').disabled = sample;
   $('count').disabled = false;
 
+  const opt180 = $('count').querySelector('option[value="180"]');
+  if (opt180) opt180.disabled = ai;
+  if (ai && Number($('count').value) > 30) $('count').value = '30';
+
   const count = Number($('count').value);
   const isLarge = count > 10;
+  const isFinalExam = count >= 100 || category === 'All 4 Subjects (Final Mock Exam)';
 
   if (bank) {
-    $('mode-note').textContent = 'Randomly selects your imported SQL Server questions by subject, level and difficulty. Save your progress when leaving an unfinished set. No AI call. Import more questions if there are not enough matching items.';
+    $('mode-note').textContent = isFinalExam
+      ? `Database Final Exam (${count} questions): Randomly draws from your imported database across ${category === 'All 4 Subjects (Final Mock Exam)' ? 'all 4 subjects' : category}. You will be prompted if available questions are fewer than requested.`
+      : 'Randomly selects the shared database questions by subject, level and difficulty. Save your progress when leaving an unfinished set. No AI call. Ask an administrator to add more questions if there are not enough matching items.';
   } else if (sample) {
-    $('mode-note').textContent =
-      `Built-in practice: ${count} questions from the bundled reviewer. This is not an official CSC question bank. Works offline without an API key.`;
-  } else if (!aiConfig.configured) {
-    $('mode-note').textContent =
-      `${aiConfig.provider} needs a server-side API key. Follow the README setup instructions, then restart the app. Reviewer Bank mode is available right now.`;
+    $('mode-note').textContent = isFinalExam
+      ? `Built-in practice: ${count} questions (Final Exam). Comprehensive offline reviewer with randomized question and choice positions.`
+      : `Built-in practice: ${count} questions from the bundled reviewer. This is not an official CSC question bank. Works offline without an API key.`;
   } else {
-    const quota = aiConfig.provider === 'Groq' ? ' Free-tier limits apply.' : '';
-    const chunked = isLarge
-      ? ` Large sets (${count} questions) are generated in chunks of 10 and saved progressively.`
-      : '';
-    $('mode-note').textContent =
-      `${aiConfig.provider} generates your questions.${quota}${chunked} Keep this page open while the set is created.`;
+    $('mode-note').textContent = 'AI custom questions are not available yet. Please choose Custom questions · Database to start practicing.';
   }
+  $('generate').disabled = ai || busy;
+  $('focus').disabled = true;
+
 }
 
 // ── Event wiring ──────────────────────────────────────────────────────────────
@@ -145,35 +160,85 @@ $('mode').onchange  = modeChanged;
 $('count').onchange = modeChanged;
 
 $('nav-create').onclick = $('back').onclick = () => leaveQuiz('create');
-$('nav-library').onclick = async () => {
-  view('library');
-  try { await library(); } catch (e) { notice(e.message); }
+$('nav-library').onclick = () => leaveQuiz('library');
+
+// ── Insufficient questions prompt dialog ──────────────────────────────────────
+let pendingInsufficientAction = null;
+
+function promptInsufficientQuestions(check) {
+  const isFinalMock = category === 'All 4 Subjects (Final Mock Exam)';
+  const label = isFinalMock ? 'the 4 exam subjects combined' : category;
+
+  $('insufficient-title').textContent = 'Some questions are not enough';
+  $('insufficient-message').textContent =
+    `You requested ${check.requested} questions for ${label}, but only ${check.available} matching ${check.available === 1 ? 'question is' : 'questions are'} available in the database.`;
+
+  if (check.breakdown && check.breakdown.length > 1) {
+    $('insufficient-breakdown').classList.remove('hidden');
+    $('insufficient-breakdown').innerHTML = '<strong>Subject breakdown:</strong><br>' +
+      check.breakdown.map(b => `${escapeHtml(b.category)}: ${b.count} available`).join(' · ');
+  } else {
+    $('insufficient-breakdown').classList.add('hidden');
+  }
+
+  $('insufficient-continue').textContent = `Yes, continue with ${check.available} questions →`;
+
+  pendingInsufficientAction = async () => {
+    $('insufficient-dialog').close();
+    await createSet({ count: check.available, allowPartial: true });
+  };
+
+  $('insufficient-dialog').showModal();
+}
+
+$('insufficient-continue').onclick = () => {
+  if (pendingInsufficientAction) {
+    const action = pendingInsufficientAction;
+    pendingInsufficientAction = null;
+    action();
+  }
 };
 
-// ── Generate form ─────────────────────────────────────────────────────────────
-$('generate-form').onsubmit = async e => {
-  e.preventDefault();
+$('insufficient-cancel').onclick = () => {
+  pendingInsufficientAction = null;
+  $('insufficient-dialog').close();
+};
+
+// ── Create practice set ───────────────────────────────────────────────────────
+async function createSet({ count, allowPartial }) {
   if (busy) return;
   busy = true;
   notice('');
 
-  const count = Number($('count').value);
-  const isSample = $('mode').value === 'sample';
+  const mode = $('mode').value;
+  if (mode === 'ai') { notice('AI custom questions are not available yet. Please choose Custom questions · Database.'); return; }
+  const isSample = mode === 'sample';
+  const isBank = mode === 'bank';
+
   $('generate').disabled = true;
-  $('generate').textContent = isSample
-    ? `Preparing ${count} questions from Reviewer Bank…`
-    : (count > 10 ? `Generating ${count} questions via AI…` : 'Creating your practice set…');
+  $('generate').textContent = count >= 100
+    ? `Preparing ${count}-question Final Exam…`
+    : (isSample || isBank ? `Preparing ${count} questions…` : (count > 10 ? `Generating ${count} questions via AI…` : 'Creating your practice set…'));
 
   try {
-    const created = await api($('mode').value === 'bank' ? '/bank/sets' : '/sets', {
-      category,
-      level:      $('level').value,
-      mode:       $('mode').value,
-      difficulty: isSample ? 'Easy' : $('difficulty').value,
-      count,
-      focus:      $('focus').value
-    });
-    if ($('mode').value === 'bank') await library();
+    const created = isBank
+      ? await api('/bank/sets', {
+          category,
+          level: $('level').value,
+          difficulty: isSample ? 'Easy' : $('difficulty').value,
+          count,
+          allowPartial: Boolean(allowPartial)
+        })
+      : await api('/sets', {
+          category,
+          level: $('level').value,
+          mode,
+          difficulty: isSample ? 'Easy' : $('difficulty').value,
+          count,
+          focus: $('focus').value
+        });
+
+    if (isBank) await library();
     await openSet(created.id);
   } catch (e) {
     notice(e.message);
@@ -182,6 +247,56 @@ $('generate-form').onsubmit = async e => {
     $('generate').disabled = false;
     $('generate').textContent = 'Create practice set →';
   }
+}
+
+// ── Generate form ─────────────────────────────────────────────────────────────
+$('generate-form').onsubmit = async e => {
+  e.preventDefault();
+  if (busy) return;
+  notice('');
+
+  const count = Number($('count').value);
+  const mode = $('mode').value;
+
+  if (mode === 'bank') {
+    busy = true;
+    $('generate').disabled = true;
+    $('generate').textContent = 'Checking question database…';
+
+    try {
+      const check = await api('/bank/check', {
+        category,
+        level: $('level').value,
+        difficulty: $('difficulty').value,
+        count
+      });
+
+      if (!check.isEnough) {
+        busy = false;
+        $('generate').disabled = false;
+        $('generate').textContent = 'Create practice set →';
+
+        if (check.available === 0) {
+          notice(`No matching questions found in your database for ${category} (${$('level').value}). Ask an administrator to add matching questions.`);
+          return;
+        }
+
+        promptInsufficientQuestions(check);
+        return;
+      }
+
+      busy = false;
+      await createSet({ count, allowPartial: false });
+    } catch (err) {
+      notice(err.message);
+      busy = false;
+      $('generate').disabled = false;
+      $('generate').textContent = 'Create practice set →';
+    }
+    return;
+  }
+
+  await createSet({ count, allowPartial: false });
 };
 
 // ── Library view ──────────────────────────────────────────────────────────────
@@ -386,11 +501,24 @@ renderCategories();
 modeChanged();
 $('generate').disabled = true;
 
-api('/session', {})
-  .then(async () => {
+api('/session')
+  .then(async session => {
+    $('study-app').hidden = false;
+    $('account-name').textContent = session.username;
+    $('admin-import').hidden = !session.isAdmin;
+    $('admin-link').hidden = !session.isAdmin;
     aiConfig = await api('/config');
     modeChanged();
     await library();
   })
-  .then(() => { $('generate').disabled = false; document.dispatchEvent(new Event('study-ready')); })
+  .then(() => { modeChanged(); document.dispatchEvent(new Event('study-ready')); })
   .catch(e => notice(e.message));
+
+$('logout').onclick = async () => {
+  if (busy) return;
+  if (current && results.length < current.questions.length && !$('quiz-view').classList.contains('hidden')) {
+    notice('Use Back to create first to save or discard your progress, then sign out.'); return;
+  }
+  try { await api('/auth/logout', {}); current = null; location.replace('/login.html'); }
+  catch (e) { notice(e.message); }
+};

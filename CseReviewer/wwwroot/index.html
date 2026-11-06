@@ -18,12 +18,12 @@
       } catch (_) {}
     })();
   </script>
-  <script src="/app.js" defer></script>
-  <script src="/import.js" defer></script>
+  <script src="/app.js?v=database-mode-1" defer></script>
+  <script src="/import.js?v=accounts-2" defer></script>
 </head>
 <body class="bg-slate-50 text-slate-800">
 
-<div class="min-h-screen lg:grid lg:grid-cols-[250px_1fr]">
+<div id="study-app" hidden class="min-h-screen lg:grid lg:grid-cols-[250px_1fr]">
 
   <!-- ── Sidebar ──────────────────────────────────────────── -->
   <aside class="bg-white border-r border-slate-200 p-6 lg:sticky lg:top-0 lg:h-screen flex flex-col">
@@ -38,7 +38,7 @@
     <nav class="flex lg:flex-col gap-2">
       <button id="nav-create" class="nav active">✦ &nbsp; Create a reviewer</button>
       <button id="nav-library" class="nav">▤ &nbsp; My saved sets <span id="saved-count" class="ml-auto"></span></button>
-    </nav>
+    <a id="admin-link" hidden class="nav" href="/admin.html">Administration</a><button id="logout" class="nav">Sign out</button></nav>
 
     <div class="mt-8 lg:mt-auto rounded-2xl bg-teal-50 p-5">
       <p class="font-semibold text-teal-900">Small steps. Big progress.</p>
@@ -46,7 +46,7 @@
       <span class="text-xs mt-4 block text-teal-700">PARA SA PANGARAP. PARA SA BAYAN.</span>
     </div>
 
-    <p class="text-xs text-slate-400 mt-5">Local study profile · This browser</p>
+    <p class="text-xs text-slate-400 mt-5"><span id="account-name"></span></p>
   </aside>
 
   <!-- ── Main content ──────────────────────────────────────── -->
@@ -78,9 +78,9 @@
         <h1 class="text-3xl md:text-4xl font-bold tracking-tight mt-3">Your next chapter starts here.</h1>
         <p class="mt-4 text-slate-500 max-w-2xl leading-7">Build a reviewer around what you need to learn. Answer at your own pace, understand every solution, and keep your favorite sets.</p>
 
-        <section class="panel p-6 mt-8" aria-labelledby="import-heading">
+        <section id="admin-import" hidden class="panel p-6 mt-8" aria-labelledby="import-heading">
           <h2 id="import-heading" class="font-bold text-xl">Add questions from an HTML file</h2>
-          <p class="text-sm text-slate-500 mt-2">Import to local SQL Server and create random sets without AI. Imported content is supplied by you, not verified by CSC.</p>
+          <p class="text-sm text-slate-500 mt-2">Import to the shared question bank and create random sets without AI. Imported content is supplied by you, not verified by CSC.</p>
           <div id="drop-zone" class="mt-4 rounded-xl border-2 border-dashed border-teal-600 p-6 text-center">
             <label for="import-file" class="cursor-pointer">Drop an HTML reviewer here, or choose a file</label>
             <input id="import-file" type="file" accept=".html,.htm" class="mt-3" aria-describedby="import-help">
@@ -91,7 +91,7 @@
           <div class="rounded-xl bg-teal-50 p-4 mt-4" role="status" aria-live="polite">
             <p class="text-sm font-semibold text-teal-900">Questions saved in your imported database bank</p>
             <p id="bank-total" class="text-3xl font-bold text-teal-800 mt-1">Loading…</p>
-            <p class="text-xs text-teal-800 mt-2">Unique questions for this browser profile. Repeated questions and copies in saved practice sets are not counted again.</p>
+            <p class="text-xs text-teal-800 mt-2">Questions available to all study accounts. Repeated questions and copies in saved practice sets are not counted again.</p>
           </div>
           <div id="bank-summary" class="text-sm text-slate-500 mt-4"></div>
         </section>
@@ -115,9 +115,8 @@
               </label>
               <label>Generation mode
                 <select id="mode">
-                  <option value="sample">Built-in practice · 2027 reviewer</option>
-                  <option value="bank">My imported database questions</option>
-                  <option value="ai">AI · Custom questions</option>
+                  <option value="bank" selected>Custom questions · Database</option>
+                  <option value="ai">AI · Custom questions (not available yet)</option>
                 </select>
               </label>
             </div>
@@ -147,6 +146,7 @@
                   <option value="10">10</option>
                   <option value="20" selected>20</option>
                   <option value="30">30</option>
+                  <option value="180">180 (Final Exam / Mock Test)</option>
                 </select>
               </label>
             </div>
@@ -189,7 +189,7 @@
       <section id="library-view" class="hidden">
         <p class="eyebrow">YOUR PERSONAL LIBRARY</p>
         <h1 class="text-3xl font-bold mt-3">Saved for your next study session.</h1>
-        <p class="text-slate-500 mt-3">Your sets stay in SQL Server and are linked to this browser profile.</p>
+        <p class="text-slate-500 mt-3">Your sets and saved progress are stored in the database and linked to your account.</p>
         <div id="library" class="grid md:grid-cols-2 gap-5 mt-8"></div>
       </section>
 
@@ -229,6 +229,20 @@
     <button id="save-progress" class="primary">Save progress &amp; leave</button>
     <button id="discard-progress" class="secondary">Discard &amp; leave</button>
     <button id="continue-quiz" class="secondary">Keep studying</button>
+  </div>
+</dialog>
+
+<dialog id="insufficient-dialog" class="panel p-6" aria-labelledby="insufficient-title" style="margin:auto;max-width:32rem;width:calc(100% - 2rem)">
+  <div class="flex items-center gap-3">
+    <span class="text-amber-700 bg-amber-100 rounded-xl px-3 py-1 font-bold text-lg">⚠</span>
+    <h2 id="insufficient-title" class="text-xl font-bold">Questions in database</h2>
+  </div>
+  <p id="insufficient-message" class="mt-4 leading-6 text-slate-600"></p>
+  <div id="insufficient-breakdown" class="mt-4 p-3 rounded-xl bg-slate-100 text-xs text-slate-600 hidden leading-5"></div>
+  <p class="font-semibold text-slate-800 mt-5">Some questions are not enough. Do you want to continue?</p>
+  <div class="flex flex-wrap gap-3 mt-6">
+    <button id="insufficient-continue" type="button" class="primary">Yes, continue with available questions →</button>
+    <button id="insufficient-cancel" type="button" class="secondary">Cancel</button>
   </div>
 </dialog>
 </body>

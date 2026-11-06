@@ -4,3 +4,7 @@ node_modules/
 .vs/
 *.user
 *.log
+artifacts/
+.env
+.env.*
+!.env.example

@@ -1,10 +1,17 @@
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 namespace CseReviewer;
-public class StudyDb(DbContextOptions<StudyDb> options) : DbContext(options) {
+public class StudyDb(DbContextOptions<StudyDb> options) : DbContext(options), IDataProtectionKeyContext {
+    public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
+    public DbSet<AccountProfile> AccountProfiles => Set<AccountProfile>();
     public DbSet<StudySet> Sets => Set<StudySet>();
     public DbSet<BankQuestion> BankQuestions => Set<BankQuestion>();
     protected override void OnModelCreating(ModelBuilder b) {
+        b.Entity<AccountProfile>().Property(p => p.Id).HasMaxLength(64);
+        b.Entity<AccountProfile>().Property(p => p.Username).HasMaxLength(30);
+        b.Entity<AccountProfile>().Property(p => p.Email).HasMaxLength(254);
+        b.Entity<AccountProfile>().HasIndex(p => p.Username).IsUnique();
         b.Entity<StudySet>().Property(s => s.Owner).HasMaxLength(64); b.Entity<StudySet>().HasIndex(s => new { s.Owner, s.Saved });
         var q = b.Entity<BankQuestion>();
         q.Property(x => x.Owner).HasMaxLength(64); q.Property(x => x.Fingerprint).HasMaxLength(64);
@@ -34,10 +41,17 @@ public record AnswerRequest(int Index, int Choice);
 public record Question(string Prompt, string[] Options, int Answer, string Explanation, string[] Steps);
 public record QuestionBatch(List<Question> Questions);
 public static class Catalog {
-    public static readonly string[] Categories = ["Numerical Ability", "Verbal Ability", "Analytical Ability", "Clerical Ability", "General Information"];
+    public static readonly string[] Categories = [
+        "All 4 Subjects (Final Mock Exam)",
+        "Numerical Ability",
+        "Verbal Ability",
+        "Analytical Ability",
+        "Clerical Ability",
+        "General Information"
+    ];
     public static string? Validate(GenerateRequest r) {
         if (!Categories.Contains(r.Category) || !new[] { "Professional", "Subprofessional" }.Contains(r.Level) || !new[] { "Easy", "Moderate", "Hard" }.Contains(r.Difficulty) || !new[] { "sample", "ai" }.Contains(r.Mode)) return "Choose valid generation settings.";
-        if (r.Count < 5 || r.Count > 30 || r.Focus == null || r.Focus.Length > 500) return "Choose 5–30 questions and a focus of at most 500 characters.";
+        if (r.Count < 5 || r.Count > 180 || r.Focus == null || r.Focus.Length > 500) return "Choose 5–180 questions and a focus of at most 500 characters.";
         if (r.Level == "Professional" && r.Category == "Clerical Ability" || r.Level == "Subprofessional" && r.Category == "Analytical Ability") return "This subject is not included in the selected exam level.";
         return null;
     }

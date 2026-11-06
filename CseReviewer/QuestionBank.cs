@@ -450,26 +450,48 @@ public static class QuestionBank
         // Seed Random securely
         var rng = new Random(RandomNumberGenerator.GetInt32(int.MaxValue));
 
+        if (r.Category == "All 4 Subjects (Final Mock Exam)")
+        {
+            var subjects = r.Level == "Subprofessional"
+                ? new[] { "Numerical Ability", "Verbal Ability", "Clerical Ability", "General Information" }
+                : new[] { "Numerical Ability", "Verbal Ability", "Analytical Ability", "General Information" };
+
+            int perSubject = r.Count / subjects.Length;
+            int remainder = r.Count % subjects.Length;
+            var combined = new List<Question>();
+
+            for (int i = 0; i < subjects.Length; i++)
+            {
+                int cnt = perSubject + (i < remainder ? 1 : 0);
+                if (cnt <= 0) continue;
+                combined.AddRange(Create(r with { Category = subjects[i], Count = cnt }));
+            }
+
+            return combined.OrderBy(_ => rng.Next()).ToList();
+        }
+
         List<PoolItem> pool = r.Category switch
         {
             "Verbal Ability"      => [.. VerbalPool],
             "Numerical Ability"   => GenerateNumericalItems(Math.Max(r.Count, 36), rng),
-            "Analytical Ability"  => GenerateAnalyticalItems(r.Count, rng),
+            "Analytical Ability"  => GenerateAnalyticalItems(Math.Max(r.Count, 36), rng),
             "Clerical Ability"    => [.. ClericalPool],
             "General Information" => [.. GeneralInfoPool],
             _                     => [.. GeneralInfoPool]
         };
 
-        // Shuffle the pool and take the exact requested count (5, 10, 20, 30)
+        // Shuffle the pool and take the exact requested count
         var selected = pool
             .OrderBy(_ => rng.Next())
             .Take(r.Count)
             .ToList();
 
         // If the pool is smaller than count, fill with repeated shuffled variations
-        if (selected.Count < r.Count)
+        while (selected.Count < r.Count)
         {
-            var extra = pool.OrderBy(_ => rng.Next()).Take(r.Count - selected.Count);
+            int needed = r.Count - selected.Count;
+            var extra = pool.OrderBy(_ => rng.Next()).Take(needed).ToList();
+            if (extra.Count == 0) break;
             selected.AddRange(extra);
         }
 

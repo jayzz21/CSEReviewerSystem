@@ -46,4 +46,4 @@ $('import-confirm').onclick=async()=>{
   }catch(e){$('import-preview').textContent=e.message;}
   finally{$('import-confirm').disabled=false;$('import-file').disabled=false;zone.ondrop=e=>{e.preventDefault();previewImport(e.dataTransfer.files[0]);};}
 };
-document.addEventListener('study-ready',()=>refreshImportedBank().catch(e=>{$('bank-total').textContent='Unavailable';$('bank-summary').textContent=e.message;}));
+document.addEventListener('study-ready',()=>!$('admin-import').hidden && refreshImportedBank().catch(e=>{$('bank-total').textContent='Unavailable';$('bank-summary').textContent=e.message;}));

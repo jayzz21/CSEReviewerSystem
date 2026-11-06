@@ -37,11 +37,17 @@ public static class PracticeProgress {
             var s = await db.Sets.SingleOrDefaultAsync(s => s.Id == id && s.Owner == c.User.FindFirstValue(ClaimTypes.NameIdentifier));
             if (s == null) return Results.NotFound();
             StudySet next;
+            if (s.Source == "AI") return Results.Json(new { error = "AI custom questions are not available yet. Create a new set using Custom questions · Database.", code = "ai_not_available" }, statusCode: 503);
             if (s.Source == "Imported") {
-                var query = db.BankQuestions.Where(q => q.Owner == s.Owner);
-                if (s.Category != "Mixed subjects") query = query.Where(q => q.Category == s.Category && (q.Level == s.Level || q.Level == "Both") && q.Difficulty == s.Difficulty);
-                if (await query.CountAsync() < s.Count) return Results.BadRequest(new { error = "Import more matching questions before starting another set." });
-                var rows = await query.OrderBy(q => Guid.NewGuid()).Take(s.Count).ToListAsync();
+                var query = db.BankQuestions.AsQueryable();
+                if (!await query.AnyAsync()) query = db.BankQuestions;
+                if (s.Category != "Mixed subjects" && s.Category != "All 4 Subjects (Final Mock Exam)")
+                    query = query.Where(q => q.Category == s.Category && (q.Level == s.Level || q.Level == "Both"));
+                var available = await query.CountAsync();
+                if (available == 0) return Results.BadRequest(new { error = "Import more matching questions before starting another set." });
+                int takeCount = Math.Min(s.Count, available);
+                var allRows = await query.ToListAsync();
+                var rows = allRows.OrderBy(_ => Guid.NewGuid()).Take(takeCount).ToList();
                 next = ImportedBank.MakeSet(s.Owner, s.Title, rows.Select(q => JsonSerializer.Deserialize<ImportEntry>(q.Data)!).ToList(), s.Category, s.Level, s.Difficulty);
             } else {
                 var request = new GenerateRequest(s.Category, s.Level, s.Difficulty, s.Count, s.Focus, s.Source == "AI" ? "ai" : "sample");

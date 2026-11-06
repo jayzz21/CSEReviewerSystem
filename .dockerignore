@@ -1,0 +1,12 @@
+.git
+**/bin
+**/obj
+node_modules
+.vs
+**/*.log
+**/*.user
+**/appsettings*.json
+!deploy/appsettings.json
+**/secrets.json
+**/.env*
+supabase-migration.sql
