@@ -1,4 +1,4 @@
-﻿// See https://aka.ms/new-console-template for more information
+// See https://aka.ms/new-console-template for more information
 using System.Net;
 using System.Text.Json;
 using CseReviewer;
@@ -87,6 +87,21 @@ foreach (var status in new[] { HttpStatusCode.ServiceUnavailable, HttpStatusCode
 var strict = JsonSerializer.SerializeToElement(QuestionOutput.Format("openai/gpt-oss-20b"));
 if (strict.GetProperty("type").GetString() != "json_schema" || !strict.GetProperty("json_schema").GetProperty("strict").GetBoolean()) throw new Exception("Strict output disabled");
 Console.WriteLine("PASS: strict schema for default model");
+
+foreach (var cat in Catalog.Categories) {
+    foreach (var cnt in new[] { 5, 10, 20, 30 }) {
+        var req = new GenerateRequest(cat, cat == "Clerical Ability" ? "Subprofessional" : "Professional", "Easy", cnt, "", "sample");
+        var res = QuestionBank.Create(req);
+        if (res.Count != cnt) throw new Exception($"Failed count for {cat} {cnt}: got {res.Count}");
+        if (res.Any(q => q.Options.Length != 4 || q.Answer < 0 || q.Answer > 3 || string.IsNullOrWhiteSpace(q.Explanation)))
+            throw new Exception($"Invalid question in {cat} {cnt}");
+        if (cat == "Numerical Ability" && res.Any(q => q.Steps.Length == 0))
+            throw new Exception($"Missing steps in {cat} {cnt}");
+        if (res.Select(q => q.Prompt).Distinct(StringComparer.OrdinalIgnoreCase).Count() != cnt)
+            throw new Exception($"Duplicate prompts in {cat} {cnt}");
+    }
+    Console.WriteLine($"PASS: QuestionBank reviewer bank for {cat} (5, 10, 20, 30 items verified)");
+}
 class RetryProvider(HttpStatusCode firstStatus, string success) : HttpMessageHandler {
     public int Calls { get; private set; }
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) {

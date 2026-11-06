@@ -1,5 +1,7 @@
 # Husay — Philippine CSE Reviewer
 
+**HTML import and offline database practice:** see [IMPORTING.md](IMPORTING.md). Drop your reviewer into the app to preview, import, and automatically save a randomized practice set. Future files can use the downloadable HTML/JSON template.
+
 ASP.NET Core 9 + Tailwind CSS 4 + Entity Framework Core + Microsoft SQL Server. A reviewer with topic-based AI generation via Groq (cloud) or Ollama (local), saved question sets, instant feedback, and worked numerical solutions.
 
 ## Run

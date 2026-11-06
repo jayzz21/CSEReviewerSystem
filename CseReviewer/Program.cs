@@ -14,7 +14,12 @@ builder.Services.AddAuthentication("study").AddCookie("study", o => {
 builder.Services.AddAuthorization();
 builder.Services.AddHttpClient<QuestionGenerator>(c => c.Timeout = TimeSpan.FromMinutes(5));
 var app = builder.Build();
-using (var scope = app.Services.CreateScope()) await scope.ServiceProvider.GetRequiredService<StudyDb>().Database.EnsureCreatedAsync();
+using (var scope = app.Services.CreateScope()) {
+    var db = scope.ServiceProvider.GetRequiredService<StudyDb>();
+    await db.Database.EnsureCreatedAsync();
+    await db.Database.ExecuteSqlRawAsync(ImportedBank.Schema);
+    await db.Database.ExecuteSqlRawAsync(PracticeProgress.Schema);
+}
 app.Use(async (ctx, next) => {
     ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
     if (ctx.Request.Method == "POST" && !ctx.Request.HasJsonContentType()) { ctx.Response.StatusCode = 415; return; }
@@ -38,17 +43,46 @@ app.MapPost("/api/session", async (HttpContext ctx) => {
 });
 app.MapGet("/api/config", () => new { categories = Catalog.Categories, provider = AiSettings.Provider(builder.Configuration), model = AiSettings.Model(builder.Configuration), configured = AiSettings.Configured(builder.Configuration) });
 var api = app.MapGroup("/api").RequireAuthorization();
+ImportedBank.Map(api);
+PracticeProgress.Map(api);
 
 api.MapGet("/sets", async (StudyDb db, HttpContext c) => await db.Sets.Where(s => s.Owner == c.User.FindFirstValue(ClaimTypes.NameIdentifier)! && s.Saved).OrderByDescending(s => s.Created).Select(s => new { s.Id, s.Title, s.Category, s.Level, s.Difficulty, s.Count, s.Source, s.Created }).ToListAsync());
 api.MapPost("/sets", async (GenerateRequest r, StudyDb db, QuestionGenerator generator, HttpContext c) => {
-    var error = Catalog.Validate(r); if (error != null) return Results.BadRequest(new { error });
-    var questions = await generator.Generate(r, c.RequestAborted);
-    var set = new StudySet { Owner = c.User.FindFirstValue(ClaimTypes.NameIdentifier)!, Title = $"{r.Category} practice", Category = r.Category, Level = r.Level, Difficulty = r.Difficulty, Count = questions.Count, Source = r.Mode == "sample" ? "Sample" : "AI", Questions = JsonSerializer.Serialize(questions) };
-    db.Sets.Add(set); await db.SaveChangesAsync(); return Results.Ok(new { set.Id });
+    var error = Catalog.Validate(r);
+    if (error != null) return Results.BadRequest(new { error });
+
+    // For large AI sets the generator makes two Groq calls (chunks).
+    // We pre-create the row so the first chunk is never lost if the second call fails.
+    var owner = c.User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+    var set = new StudySet {
+        Owner      = owner,
+        Title      = $"{r.Category} practice",
+        Category   = r.Category,
+        Focus      = r.Focus,
+        Level      = r.Level,
+        Difficulty = r.Difficulty,
+        Source     = r.Mode == "sample" ? "Sample" : "AI"
+    };
+    db.Sets.Add(set);
+    await db.SaveChangesAsync();   // persist the shell immediately
+
+    var questions = await generator.Generate(r, c.RequestAborted, async partialQuestions => {
+        // Callback: save each completed chunk to the DB as generation progresses.
+        set.Questions = JsonSerializer.Serialize(partialQuestions);
+        set.Count     = partialQuestions.Count;
+        await db.SaveChangesAsync();
+    });
+
+    // Final save with the complete question list.
+    set.Questions = JsonSerializer.Serialize(questions);
+    set.Count     = questions.Count;
+    await db.SaveChangesAsync();
+
+    return Results.Ok(new { set.Id });
 });
 api.MapGet("/sets/{id:guid}", async (Guid id, StudyDb db, HttpContext c) => {
     var s = await db.Sets.SingleOrDefaultAsync(s => s.Id == id && s.Owner == c.User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-    return s == null ? Results.NotFound() : Results.Ok(new { s.Id, s.Title, s.Category, s.Level, s.Difficulty, s.Source, s.Saved, questions = JsonSerializer.Deserialize<List<Question>>(s.Questions)!.Select((q, i) => new { index = i, q.Prompt, q.Options }) });
+    return s == null ? Results.NotFound() : Results.Ok(new { s.Id, s.Title, s.Category, s.Level, s.Difficulty, s.Source, s.Saved, progress = PracticeProgress.Feedback(s), questions = JsonSerializer.Deserialize<List<Question>>(s.Questions)!.Select((q, i) => new { index = i, q.Prompt, q.Options }) });
 });
 api.MapPost("/sets/{id:guid}/save", async (Guid id, SaveRequest r, StudyDb db, HttpContext c) => {
     var s = await db.Sets.SingleOrDefaultAsync(s => s.Id == id && s.Owner == c.User.FindFirstValue(ClaimTypes.NameIdentifier)!); if (s == null) return Results.NotFound();

@@ -3,7 +3,15 @@ using System.Text.Json;
 namespace CseReviewer;
 public class StudyDb(DbContextOptions<StudyDb> options) : DbContext(options) {
     public DbSet<StudySet> Sets => Set<StudySet>();
-    protected override void OnModelCreating(ModelBuilder b) { b.Entity<StudySet>().Property(s => s.Owner).HasMaxLength(64); b.Entity<StudySet>().HasIndex(s => new { s.Owner, s.Saved }); }
+    public DbSet<BankQuestion> BankQuestions => Set<BankQuestion>();
+    protected override void OnModelCreating(ModelBuilder b) {
+        b.Entity<StudySet>().Property(s => s.Owner).HasMaxLength(64); b.Entity<StudySet>().HasIndex(s => new { s.Owner, s.Saved });
+        var q = b.Entity<BankQuestion>();
+        q.Property(x => x.Owner).HasMaxLength(64); q.Property(x => x.Fingerprint).HasMaxLength(64);
+        q.Property(x => x.Category).HasMaxLength(64); q.Property(x => x.Level).HasMaxLength(32);
+        q.Property(x => x.Difficulty).HasMaxLength(16); q.Property(x => x.Source).HasMaxLength(200);
+        q.HasIndex(x => new { x.Owner, x.Fingerprint }).IsUnique();
+    }
 }
 public class StudySet {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -17,6 +25,8 @@ public class StudySet {
     public bool Saved { get; set; }
     public DateTime Created { get; set; } = DateTime.UtcNow;
     public string Questions { get; set; } = "[]";
+    public string Progress { get; set; } = "[]";
+    public string Focus { get; set; } = "";
 }
 public record GenerateRequest(string Category, string Level, string Difficulty, int Count, string Focus, string Mode);
 public record SaveRequest(string Title);
@@ -26,28 +36,52 @@ public record QuestionBatch(List<Question> Questions);
 public static class Catalog {
     public static readonly string[] Categories = ["Numerical Ability", "Verbal Ability", "Analytical Ability", "Clerical Ability", "General Information"];
     public static string? Validate(GenerateRequest r) {
-        if (r.Mode == "sample" && r.Count != 5) return "Sample sets contain exactly 5 questions.";
         if (!Categories.Contains(r.Category) || !new[] { "Professional", "Subprofessional" }.Contains(r.Level) || !new[] { "Easy", "Moderate", "Hard" }.Contains(r.Difficulty) || !new[] { "sample", "ai" }.Contains(r.Mode)) return "Choose valid generation settings.";
-        if (r.Count < 5 || r.Count > 20 || r.Focus == null || r.Focus.Length > 500) return "Choose 5–20 questions and a focus of at most 500 characters.";
+        if (r.Count < 5 || r.Count > 30 || r.Focus == null || r.Focus.Length > 500) return "Choose 5–30 questions and a focus of at most 500 characters.";
         if (r.Level == "Professional" && r.Category == "Clerical Ability" || r.Level == "Subprofessional" && r.Category == "Analytical Ability") return "This subject is not included in the selected exam level.";
         return null;
     }
 }
 public class QuestionGenerator(HttpClient http, IConfiguration config) {
-    // Groq free-tier models handle ~10 questions reliably per request at 8 000 tokens.
-    // For larger sets we split into chunks so the model never truncates the JSON.
-    private const int ChunkSize = 10;
+    public async Task<List<Question>> Generate(
+        GenerateRequest r,
+        CancellationToken ct,
+        Func<List<Question>, Task>? onChunkSaved = null)
+    {
+        if (r.Mode == "sample") return QuestionBank.Create(r);
 
-    public async Task<List<Question>> Generate(GenerateRequest r, CancellationToken ct) {
-        if (r.Mode == "sample") return Samples.Create(r);
-        if (r.Count <= ChunkSize) return await GenerateChunk(r, r.Count, ct, 0);
+        // If count <= 20, try generating in one shot with 12 000 token limit
+        if (r.Count <= 20)
+        {
+            try
+            {
+                return await GenerateChunk(r, r.Count, ct, 0);
+            }
+            catch (Exception ex) when (r.Count > 10 && ex is InvalidDataException or HttpRequestException)
+            {
+                // Fallback: If single call fails on 20 items (e.g. Groq free-tier token cap truncation),
+                // split into two chunks of 10 questions with progressive persistence
+                var half1 = r.Count / 2;
+                var half2 = r.Count - half1;
+                var chunk1 = await GenerateChunk(r, half1, ct, 0);
+                if (onChunkSaved != null) await onChunkSaved(chunk1);
+                var chunk2 = await GenerateChunk(r, half2, ct, 0);
+                return [.. chunk1, .. chunk2];
+            }
+        }
 
-        // Split into two chunks and merge results.
-        var half1 = r.Count / 2;
-        var half2 = r.Count - half1;
-        var chunk1 = await GenerateChunk(r, half1, ct, 0);
-        var chunk2 = await GenerateChunk(r, half2, ct, 0);
-        return [.. chunk1, .. chunk2];
+        // For counts > 20 (e.g. 30), chunk in batches of 10
+        var all = new List<Question>();
+        int remaining = r.Count;
+        while (remaining > 0)
+        {
+            int currentChunk = Math.Min(remaining, 10);
+            var chunk = await GenerateChunk(r, currentChunk, ct, 0);
+            all.AddRange(chunk);
+            if (onChunkSaved != null) await onChunkSaved(all);
+            remaining -= currentChunk;
+        }
+        return all;
     }
 
     private async Task<List<Question>> GenerateChunk(GenerateRequest r, int count, CancellationToken ct, int attempt) {
@@ -116,21 +150,25 @@ public class QuestionGenerator(HttpClient http, IConfiguration config) {
             throw new InvalidDataException($"AI returned {qs?.Count ?? 0} questions but {count} were requested.");
         // Validate each question; use ordinal (case-sensitive) duplicate check on options
         // since the model legitimately uses options that differ only in case for some question types.
-        if (qs.Any(q => q == null
-                || string.IsNullOrWhiteSpace(q.Prompt)
-                || q.Options == null
-                || q.Options.Length != 4
-                || q.Options.Any(string.IsNullOrWhiteSpace)
-                || q.Options.Distinct(StringComparer.Ordinal).Count() != 4
-                || q.Answer < 0 || q.Answer > 3
-                || string.IsNullOrWhiteSpace(q.Explanation)
-                || q.Steps == null
-                || (r.Category == "Numerical Ability" && q.Steps.Length == 0)))
-            throw new InvalidDataException("One or more AI questions failed validation.");
+        for (int i = 0; i < qs.Count; i++) {
+            var q = qs[i];
+            if (q == null) throw new InvalidDataException($"Q{i} is null");
+            if (string.IsNullOrWhiteSpace(q.Prompt)) throw new InvalidDataException($"Q{i} prompt empty");
+            if (q.Options == null || q.Options.Length != 4) throw new InvalidDataException($"Q{i} options length {q.Options?.Length}");
+            if (q.Options.Any(string.IsNullOrWhiteSpace)) throw new InvalidDataException($"Q{i} options blank");
+            if (q.Options.Distinct(StringComparer.Ordinal).Count() != 4) throw new InvalidDataException($"Q{i} options duplicate: {string.Join(", ", q.Options)}");
+            if (q.Answer < 0 || q.Answer > 3) throw new InvalidDataException($"Q{i} answer index {q.Answer}");
+            if (string.IsNullOrWhiteSpace(q.Explanation)) throw new InvalidDataException($"Q{i} explanation blank");
+            if (q.Steps == null) throw new InvalidDataException($"Q{i} steps null");
+            if (r.Category == "Numerical Ability" && q.Steps.Length == 0) throw new InvalidDataException($"Q{i} numerical steps empty: {q.Prompt}");
+        }
         // Reject duplicate prompts within the chunk.
-        if (qs.Select(q => q.Prompt.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Count() != qs.Count)
-            throw new InvalidDataException("AI returned duplicate question prompts.");
+        var dup = qs.GroupBy(q => q.Prompt.Trim(), StringComparer.OrdinalIgnoreCase).FirstOrDefault(g => g.Count() > 1);
+        if (dup != null)
+            throw new InvalidDataException($"AI returned duplicate question prompt: '{dup.Key}'");
         return qs;
     }
 }
+
+
 

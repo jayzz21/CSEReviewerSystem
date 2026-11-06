@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Husay question import template</title></head>
+<body><h1>Husay question import template</h1>
+<p>Edit the JSON block below using a text editor. Duplicate question objects to add more questions. answer is zero-based: 0=A, 1=B, 2=C, 3=D. Use plain text strings, not HTML.</p>
+<p>Categories: Numerical Ability, Verbal Ability, Analytical Ability, Clerical Ability, General Information. Level: Professional, Subprofessional, Both. Analytical must be Professional; Clerical must be Subprofessional. Difficulty: Easy, Moderate, Hard. Numerical questions require steps.</p>
+<script id="cse-question-bank" type="application/json">
+{
+  "version": 1,
+  "title": "My numerical questions",
+  "questions": [
+    {
+      "category": "Numerical Ability", "level": "Both", "difficulty": "Easy",
+      "prompt": "What is 25% of 240?",
+      "options": ["40", "50", "60", "80"], "answer": 2,
+      "explanation": "25% means one quarter. One quarter of 240 is 60.",
+      "steps": ["25 ÷ 100 = 0.25", "0.25 × 240 = 60"]
+    }
+  ]
+}
+</script></body></html>
