@@ -2,10 +2,16 @@ const $ = id => document.getElementById(id);
 const categories = ['Numerical Ability', 'Verbal Ability', 'Analytical Ability', 'Clerical Ability', 'General Information'];
 const hints = ['Numbers, patterns & word problems', 'Words, grammar & comprehension', 'Logic, analogies & conclusions', 'Filing, spelling & attention to detail', 'Public service, ethics & citizenship'];
 let category = categories[0], current, index = 0, choice = null, results = [], busy = false;
+let aiConfig = { provider: 'AI provider', configured: false };
 const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function notice(message) { $('notice').textContent = message; $('notice').classList.toggle('hidden', !message); }
 async function api(path, data) {
- const response = await fetch('/api' + path, data === undefined ? {} : {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+ let response;
+ try {
+  response = await fetch('/api' + path, data === undefined ? {} : {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+ } catch {
+  throw new Error('Cannot reach the reviewer server. Start dotnet watch --project CseReviewer run --launch-profile http from the solution folder, wait for “Now listening”, then refresh this page.');
+ }
  const text = await response.text(); let body; try { body = text ? JSON.parse(text) : null; } catch { body = null; }
  if (!response.ok) throw new Error(body?.error || (response.status === 401 ? 'Your study session expired. Refresh this page.' : 'The request failed. Please try again.'));
  return body;
@@ -24,7 +30,7 @@ function modeChanged() {
  const sample = $('mode').value === 'sample';
  ['focus','difficulty','count'].forEach(id => $(id).disabled = sample);
  if (sample) { $('count').value = '5'; $('difficulty').value = 'Easy'; }
- $('mode-note').textContent = sample ? 'Sample mode: 5 introductory questions. Custom focus and difficulty are available in AI mode.' : 'AI mode uses your local Ollama model. Generation may take a few minutes. Keep this page open.';
+ $('mode-note').textContent = sample ? 'Sample mode: 5 introductory questions. Custom focus and difficulty are available in AI mode.' : !aiConfig.configured ? `${aiConfig.provider} needs a server-side API key. Follow the README setup instructions, then restart the app. Sample mode is available now.` : `${aiConfig.provider} generates your questions. ${aiConfig.provider === 'Groq' ? 'Your topic and settings are sent to Groq; free-tier limits apply. ' : ''}Keep this page open while the set is created.`;
 }
 $('level').onchange = renderCategories; $('mode').onchange = modeChanged;
 $('nav-create').onclick = $('back').onclick = () => view('create');
@@ -83,4 +89,4 @@ $('save-confirm').onclick=async()=>{
 };
 renderCategories();modeChanged();
 $('generate').disabled=true;
-api('/session',{}).then(library).then(()=>{$('generate').disabled=false;}).catch(e=>notice(e.message));
+api('/session',{}).then(async()=>{ aiConfig=await api('/config'); modeChanged(); await library(); }).then(()=>{$('generate').disabled=false;}).catch(e=>notice(e.message));

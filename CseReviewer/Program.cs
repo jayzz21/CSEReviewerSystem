@@ -22,10 +22,10 @@ app.Use(async (ctx, next) => {
     catch (OperationCanceledException) when (ctx.RequestAborted.IsCancellationRequested) {
         // The caller left the page; do not attempt to write to a closed connection.
     }
-    catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or JsonException or InvalidDataException) {
+    catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or JsonException or InvalidDataException or AiConfigurationException) {
         app.Logger.LogWarning(ex, "Question generation failed");
         if (!ctx.Response.HasStarted) {
-            var failure = GenerationFailure.From(ex, builder.Configuration["AI:Model"] ?? "llama3.2");
+            var failure = GenerationFailure.From(ex, AiSettings.Model(builder.Configuration), AiSettings.Provider(builder.Configuration));
             ctx.Response.StatusCode = failure.Status;
             await ctx.Response.WriteAsJsonAsync(new { error = failure.Error, code = failure.Code });
         }
@@ -36,7 +36,7 @@ app.MapPost("/api/session", async (HttpContext ctx) => {
     if (ctx.User.Identity?.IsAuthenticated != true) await ctx.SignInAsync("study", new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString())], "study")), new AuthenticationProperties { IsPersistent = true });
     return Results.Ok(new { profile = "This browser's study profile" });
 });
-app.MapGet("/api/config", () => new { categories = Catalog.Categories, provider = "Ollama", model = builder.Configuration["AI:Model"] });
+app.MapGet("/api/config", () => new { categories = Catalog.Categories, provider = AiSettings.Provider(builder.Configuration), model = AiSettings.Model(builder.Configuration), configured = AiSettings.Configured(builder.Configuration) });
 var api = app.MapGroup("/api").RequireAuthorization();
 
 api.MapGet("/sets", async (StudyDb db, HttpContext c) => await db.Sets.Where(s => s.Owner == c.User.FindFirstValue(ClaimTypes.NameIdentifier)! && s.Saved).OrderByDescending(s => s.Created).Select(s => new { s.Id, s.Title, s.Category, s.Level, s.Difficulty, s.Count, s.Source, s.Created }).ToListAsync());

@@ -34,11 +34,26 @@ public static class Catalog {
     }
 }
 public class QuestionGenerator(HttpClient http, IConfiguration config) {
+    // Groq free-tier models handle ~10 questions reliably per request at 8 000 tokens.
+    // For larger sets we split into chunks so the model never truncates the JSON.
+    private const int ChunkSize = 10;
+
     public async Task<List<Question>> Generate(GenerateRequest r, CancellationToken ct) {
         if (r.Mode == "sample") return Samples.Create(r);
+        if (r.Count <= ChunkSize) return await GenerateChunk(r, r.Count, ct, 0);
+
+        // Split into two chunks and merge results.
+        var half1 = r.Count / 2;
+        var half2 = r.Count - half1;
+        var chunk1 = await GenerateChunk(r, half1, ct, 0);
+        var chunk2 = await GenerateChunk(r, half2, ct, 0);
+        return [.. chunk1, .. chunk2];
+    }
+
+    private async Task<List<Question>> GenerateChunk(GenerateRequest r, int count, CancellationToken ct, int attempt) {
         var prompt = $$"""
         Create original Philippine Civil Service Exam practice questions, not official or leaked questions.
-        Level: {{r.Level}}. Subject: {{r.Category}}. Difficulty: {{r.Difficulty}}. Exactly {{r.Count}} distinct questions.
+        Level: {{r.Level}}. Subject: {{r.Category}}. Difficulty: {{r.Difficulty}}. Exactly {{count}} distinct questions.
         Numerical: operations, number sequences, word problems. Verbal: English/Filipino vocabulary, grammar, paragraph organization, comprehension.
         Analytical: analogies, reasoning, assumptions, conclusions, data interpretation. Clerical: filing and spelling.
         General information: Philippine Constitution, RA 6713, peace/human rights, environmental protection. Avoid uncertain or time-sensitive claims.
@@ -46,13 +61,76 @@ public class QuestionGenerator(HttpClient http, IConfiguration config) {
         Return only JSON: {"questions":[{"prompt":"...","options":["...","...","...","..."],"answer":0,"explanation":"Why correct and alternatives wrong","steps":["Step 1...","Step 2..."]}]}.
         Answer is zero-based. Exactly one correct option. Numerical questions MUST include full calculation steps and independently checked arithmetic; otherwise steps may be empty. Use English except Filipino language questions.
         """;
-        using var response = await http.PostAsJsonAsync(config["AI:Endpoint"], new { model = config["AI:Model"], prompt, stream = false, format = "json", options = new { temperature = 0.5 } }, ct);
+        var provider = AiSettings.Provider(config);
+        using var request = new HttpRequestMessage(HttpMethod.Post, provider == "Ollama"
+            ? config["AI:Ollama:Endpoint"] ?? "http://localhost:11434/api/generate"
+            : "https://api.groq.com/openai/v1/chat/completions");
+        if (provider == "Groq") {
+            var key = AiSettings.Key(config);
+            if (string.IsNullOrWhiteSpace(key)) throw new AiConfigurationException("Groq is not configured. Add AI:Groq:ApiKey using .NET user secrets or set GROQ_API_KEY, then restart the app. Sample mode works without a key.");
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", key.Trim());
+            // 8 000 tokens is enough for 10 detailed numerical questions.
+            var maxTokens = count <= 5 ? 4000 : count <= 10 ? 8000 : 12000;
+            request.Content = JsonContent.Create(new {
+                model = AiSettings.Model(config),
+                messages = new[] { new { role = "system", content = "You write accurate, original Philippine CSE practice material. Respond only with the requested JSON object." }, new { role = "user", content = prompt } },
+                response_format = QuestionOutput.Format(AiSettings.Model(config)),
+                temperature = 0.5,
+                max_completion_tokens = maxTokens,
+                stream = false
+            });
+        } else if (provider == "Ollama") {
+            request.Content = JsonContent.Create(new { model = AiSettings.Model(config), prompt, stream = false, format = "json", options = new { temperature = 0.5 } });
+        } else throw new AiConfigurationException("Unsupported AI provider. Set AI:Provider to Groq or Ollama.");
+        using var response = await http.SendAsync(request, ct);
+        if (!response.IsSuccessStatusCode && provider == "Groq") {
+            var outputRejected = false;
+            try {
+                var error = await response.Content.ReadFromJsonAsync<JsonElement>(ct);
+                outputRejected = response.StatusCode == System.Net.HttpStatusCode.BadRequest && error.TryGetProperty("error", out var detail) && detail.TryGetProperty("code", out var code) && code.GetString() == "json_validate_failed";
+            } catch (JsonException) { /* Some upstream failures have no JSON body. */ }
+            var transient = (int)response.StatusCode is 500 or 502 or 503 or 504;
+            if (attempt == 0 && (outputRejected || transient)) {
+                await Task.Delay(TimeSpan.FromSeconds(1), ct);
+                return await GenerateChunk(r, count, ct, 1);
+            }
+            if (outputRejected) throw new InvalidDataException("Provider rejected generated JSON after retry.");
+        }
         response.EnsureSuccessStatusCode();
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(ct);
-        if (body.ValueKind != JsonValueKind.Object || !body.TryGetProperty("response", out var generated) || generated.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(generated.GetString())) throw new InvalidDataException("Missing AI response");
-        var batch = JsonSerializer.Deserialize<QuestionBatch>(generated.GetString()!, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        string? generated;
+        try {
+            if (provider == "Groq") {
+                var completion = body.GetProperty("choices")[0];
+                var finishReason = completion.GetProperty("finish_reason").GetString();
+                if (finishReason != "stop") throw new InvalidDataException($"Incomplete AI completion (finish_reason={finishReason})");
+                generated = completion.GetProperty("message").GetProperty("content").GetString();
+            } else generated = body.GetProperty("response").GetString();
+        } catch (Exception ex) when (ex is KeyNotFoundException or InvalidOperationException or IndexOutOfRangeException) {
+            throw new InvalidDataException("Missing AI response", ex);
+        }
+        if (string.IsNullOrWhiteSpace(generated)) throw new InvalidDataException("Empty AI response");
+        var batch = JsonSerializer.Deserialize<QuestionBatch>(generated, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
         var qs = batch?.Questions;
-        if (qs == null || qs.Count != r.Count || qs.Any(q => q == null || string.IsNullOrWhiteSpace(q.Prompt) || q.Options == null || q.Options.Length != 4 || q.Options.Any(string.IsNullOrWhiteSpace) || q.Options.Distinct(StringComparer.OrdinalIgnoreCase).Count() != 4 || q.Answer < 0 || q.Answer > 3 || string.IsNullOrWhiteSpace(q.Explanation) || q.Steps == null || (r.Category == "Numerical Ability" && q.Steps.Length == 0)) || qs.Select(q => q.Prompt).Distinct().Count() != qs.Count) throw new InvalidDataException("Invalid AI question batch");
+        if (qs == null || qs.Count != count)
+            throw new InvalidDataException($"AI returned {qs?.Count ?? 0} questions but {count} were requested.");
+        // Validate each question; use ordinal (case-sensitive) duplicate check on options
+        // since the model legitimately uses options that differ only in case for some question types.
+        if (qs.Any(q => q == null
+                || string.IsNullOrWhiteSpace(q.Prompt)
+                || q.Options == null
+                || q.Options.Length != 4
+                || q.Options.Any(string.IsNullOrWhiteSpace)
+                || q.Options.Distinct(StringComparer.Ordinal).Count() != 4
+                || q.Answer < 0 || q.Answer > 3
+                || string.IsNullOrWhiteSpace(q.Explanation)
+                || q.Steps == null
+                || (r.Category == "Numerical Ability" && q.Steps.Length == 0)))
+            throw new InvalidDataException("One or more AI questions failed validation.");
+        // Reject duplicate prompts within the chunk.
+        if (qs.Select(q => q.Prompt.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Count() != qs.Count)
+            throw new InvalidDataException("AI returned duplicate question prompts.");
         return qs;
     }
 }
+

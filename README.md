@@ -1,6 +1,6 @@
 # Husay — Philippine CSE Reviewer
 
-ASP.NET Core 9 + Tailwind CSS 4 + Entity Framework Core + Microsoft SQL Server. A local-first reviewer with topic-based AI generation via Ollama, saved question sets, instant feedback, and worked numerical solutions.
+ASP.NET Core 9 + Tailwind CSS 4 + Entity Framework Core + Microsoft SQL Server. A reviewer with topic-based AI generation via Groq (cloud) or Ollama (local), saved question sets, instant feedback, and worked numerical solutions.
 
 ## Run
 
@@ -26,14 +26,29 @@ For SQL Server Express, change `ConnectionStrings:Study` in `CseReviewer/appsett
 
 ## AI setup
 
-Install Ollama from https://ollama.com and run:
+Groq is the default. No Ollama installation or OpenAI subscription is needed. Create a Groq API key at https://console.groq.com/keys, then configure it **locally**, not in chat or frontend files:
+
+```powershell
+dotnet user-secrets set "AI:Groq:ApiKey" "YOUR_GROQ_KEY" --project CseReviewer
+dotnet run --project CseReviewer
+```
+
+Replace the placeholder on your own computer. User secrets are development settings stored outside the repository (not an encrypted vault). For deployment, use the hosting secret store or environment variable `GROQ_API_KEY` / `AI__Groq__ApiKey`. Never commit a real key. Restart the app after setting it.
+
+Select **AI · Custom questions**. The default model is `openai/gpt-oss-20b`, hosted by Groq: it uses your Groq account, not OpenAI billing. To use another Groq text model with JSON Object Mode, set `AI:Groq:Model` to its current model ID from your Groq console. Availability and free-tier quotas can change. The backend sends topic/settings to Groq; it does not send your saved library. There is no automatic switch to another provider or paid plan.
+
+The app handles missing keys, rejected credentials, rate limits, invalid output, and timeouts separately. Start with 5 questions; a 20-question set consumes more output tokens and may hit free-tier limits. Returned JSON is validated for count, choices, answer index, explanations, and numerical steps before saving. This does not independently verify factual or mathematical correctness.
+
+### Optional local alternative: Ollama
+
+Set `AI:Provider` to `Ollama` in appsettings. Install Ollama from https://ollama.com and run:
 
 ```powershell
 ollama pull llama3.2
 ollama serve
 ```
 
-If Ollama is already running, a second `serve` is unnecessary. Select **AI · Custom questions** in the app. Configure `AI:Model` and `AI:Endpoint` in appsettings or `AI__Model` / `AI__Endpoint` environment variables. The .NET backend calls Ollama, validates the batch, stores it in SQL Server, and returns question text without answer keys. Failed generation displays an error, never silently substitutes samples. The request can take up to five minutes; keep the page open. This is request-driven asynchronous generation, not a durable background queue.
+If Ollama is already running, a second `serve` is unnecessary. Configure `AI:Ollama:Model` and `AI:Ollama:Endpoint` in appsettings. These replace the original `AI:Model` and `AI:Endpoint` settings. Both providers keep answer keys on the server until submission. Failed generation never silently substitutes samples. Requests can take up to five minutes; keep the page open. This is request-driven asynchronous generation, not a durable background queue.
 
 ## Behavior and scope
 
@@ -62,7 +77,7 @@ Validation errors return 400, unauthenticated calls 401, inaccessible sets 404, 
 
 ### Troubleshooting AI generation
 
-A valid `mode: "ai"` request still needs the separate Ollama service. The website port (such as 5080 or 5213) is different from Ollama's default port, 11434. Install Ollama, run `ollama pull llama3.2`, then start `ollama serve` if it is not already running. Check `http://localhost:11434/api/tags` for installed models. The configured model name must match an installed model. Start with 5 questions before trying a 20-question set. Restart the .NET app after rebuilding changes.
+For Groq, `ai_not_configured` means the server needs a key; `ai_auth_failed` means credentials or access were rejected; `ai_rate_limited` (HTTP 429) means wait for the provider's quota to reset. A configured key is not proof of valid credentials or available quota. For Ollama only, the website port (5080 or 5213) differs from its port 11434. Check `http://localhost:11434/api/tags` and your configured local model. Restart .NET after configuration changes.
 
 ## Verification
 
@@ -75,3 +90,5 @@ With the app running, execute `powershell -File scripts/smoke.ps1`. It tests dat
 - CSC scope: https://www.csc.gov.ph/more-than-400k-to-take-26-march-career-service-exam
 - Tailwind build: https://tailwindcss.com/docs/installation/tailwind-cli
 - Ollama JSON generation: https://github.com/ollama/ollama/blob/main/docs/api.md
+- Groq JSON output: https://console.groq.com/docs/structured-outputs
+- Groq limits: https://console.groq.com/docs/rate-limits
