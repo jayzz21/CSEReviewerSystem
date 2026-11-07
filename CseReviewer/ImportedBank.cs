@@ -35,13 +35,13 @@ public static class ImportedBank {
                 : ["Numerical Ability", "Verbal Ability", "Analytical Ability", "General Information"])
             : [category];
 
-    public static async Task<IQueryable<BankQuestion>> GetBaseQueryAsync(StudyDb db, string owner, string level, string difficulty) {
+    public static Task<IQueryable<BankQuestion>> GetBaseQueryAsync(StudyDb db, string owner, string level, string difficulty) {
         var q = db.BankQuestions.AsQueryable();
         q = q.Where(x => x.Level == level || x.Level == "Both");
-        if (await q.AnyAsync(x => x.Difficulty == difficulty)) {
+        if (difficulty != "Mixed") {
             q = q.Where(x => x.Difficulty == difficulty);
         }
-        return q;
+        return Task.FromResult(q);
     }
 
     public static void Map(RouteGroupBuilder api) {
@@ -81,8 +81,8 @@ public static class ImportedBank {
             return Results.Ok(new { set.Id, added, totalQuestions = existing.Count, skipped = parsed.Issues.Count, duplicates = parsed.Duplicates + parsed.Questions.Count - added, count = set.Count });
         }).RequireAuthorization("Admin");
         api.MapPost("/bank/check", async (BankCheckRequest r, StudyDb db, HttpContext c) => {
-            if (!Catalog.Categories.Contains(r.Category) || !new[] { "Professional", "Subprofessional" }.Contains(r.Level) || !new[] { "Easy", "Moderate", "Hard" }.Contains(r.Difficulty) || r.Count is < 1 or > 180) {
-                return Results.BadRequest(new { error = "Choose valid subject, level, difficulty and 1–180 questions." });
+            if (!Catalog.Categories.Contains(r.Category) || !new[] { "Professional", "Subprofessional" }.Contains(r.Level) || !new[] { "Easy", "Moderate", "Hard", "Mixed" }.Contains(r.Difficulty) || r.Count < 1) {
+                return Results.BadRequest(new { error = "Choose valid subject, level, difficulty and a positive question count." });
             }
             if (r.Level == "Professional" && r.Category == "Clerical Ability" || r.Level == "Subprofessional" && r.Category == "Analytical Ability") {
                 return Results.BadRequest(new { error = "This subject is not included in the selected exam level." });
@@ -108,8 +108,8 @@ public static class ImportedBank {
             });
         });
         api.MapPost("/bank/sets", async (BankRequest r, StudyDb db, HttpContext c) => {
-            if (!Catalog.Categories.Contains(r.Category) || !new[] { "Professional", "Subprofessional" }.Contains(r.Level) || !new[] { "Easy", "Moderate", "Hard" }.Contains(r.Difficulty) || r.Count is < 1 or > 180 || r.Category == "Analytical Ability" && r.Level != "Professional" || r.Category == "Clerical Ability" && r.Level != "Subprofessional") {
-                return Results.BadRequest(new { error = "Choose valid subject, level, difficulty and 1–180 questions." });
+            if (!Catalog.Categories.Contains(r.Category) || !new[] { "Professional", "Subprofessional" }.Contains(r.Level) || !new[] { "Easy", "Moderate", "Hard", "Mixed" }.Contains(r.Difficulty) || r.Count < 1 || r.Category == "Analytical Ability" && r.Level != "Professional" || r.Category == "Clerical Ability" && r.Level != "Subprofessional") {
+                return Results.BadRequest(new { error = "Choose valid subject, level, difficulty and a positive question count." });
             }
             var owner = c.User.FindFirstValue(ClaimTypes.NameIdentifier)!;
             var baseQuery = await GetBaseQueryAsync(db, owner, r.Level, r.Difficulty);

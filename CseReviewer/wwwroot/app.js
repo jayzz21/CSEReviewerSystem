@@ -81,13 +81,15 @@ $('theme-toggle').onclick = () => {
 
 // ── View switching ────────────────────────────────────────────────────────────
 function view(name) {
-  ['create', 'library', 'quiz', 'multiplayer'].forEach(v =>
+  ['create', 'library', 'quiz', 'multiplayer', 'admin'].forEach(v =>
     $(v + '-view').classList.toggle('hidden', v !== name)
   );
   $('nav-create').classList.toggle('active', name === 'create' || name === 'quiz');
   $('nav-multiplayer').classList.toggle('active', name === 'multiplayer');
   if (name === 'multiplayer') window.HusayMultiplayer.enter();
-  else if (new URLSearchParams(location.search).get('view') === 'multiplayer') history.replaceState(null, '', '/');
+  else if (name === 'admin') { history.replaceState(null, '', '/?view=admin'); window.HusayAdmin.enter(); }
+  else if (new URLSearchParams(location.search).has('view')) history.replaceState(null, '', '/');
+  $('admin-link').classList.toggle('active', name === 'admin');
   $('nav-library').classList.toggle('active', name === 'library');
   notice('');
 }
@@ -124,6 +126,34 @@ function renderCategories() {
 }
 
 // ── Mode toggle ────────────────────────────────────────────────────────────────
+let bankFilterKey = '', bankAvailable = null, bankRequestVersion = 0;
+function selectedCount() { return Number(($('mode').value === 'bank' ? $('bank-count') : $('count')).value); }
+async function updateBankCount() {
+  const bank = $('mode').value === 'bank';
+  $('bank-count').hidden = !bank; $('bank-count').disabled = !bank;
+  $('count').hidden = bank; $('count').disabled = bank;
+  $('bank-available').hidden = !bank;
+  if (!bank) { bankRequestVersion++; bankFilterKey = ''; return; }
+  const key = JSON.stringify([category, $('level').value, $('difficulty').value]);
+  if (key === bankFilterKey) { $('generate').disabled = busy || !bankAvailable; return; }
+  bankFilterKey = key; bankAvailable = null;
+  const version = ++bankRequestVersion;
+  $('generate').disabled = true; $('bank-count').disabled = true;
+  $('bank-available').textContent = 'Checking available questions…';
+  try {
+    const result = await api('/bank/check', { category, level: $('level').value, difficulty: $('difficulty').value, count: 1 });
+    if (version !== bankRequestVersion) return;
+    bankAvailable = result.available;
+    $('bank-count').max = String(bankAvailable);
+    $('bank-count').value = String(Math.min(Math.max(1, Number($('bank-count').value) || 20), bankAvailable));
+    $('bank-count').disabled = !bankAvailable;
+    $('generate').disabled = busy || !bankAvailable;
+    $('bank-available').textContent = bankAvailable ? `${bankAvailable.toLocaleString()} matching questions available. Enter 1–${bankAvailable.toLocaleString()}.` : 'No matching questions. Try Mixed or ask an administrator to import more.';
+  } catch (e) {
+    if (version !== bankRequestVersion) return;
+    bankFilterKey = ''; $('bank-available').textContent = 'Unable to check availability. ' + e.message;
+  }
+}
 function modeChanged() {
   const sample = $('mode').value === 'sample';
   const bank = $('mode').value === 'bank';
@@ -137,7 +167,7 @@ function modeChanged() {
   if (opt180) opt180.disabled = ai;
   if (ai && Number($('count').value) > 30) $('count').value = '30';
 
-  const count = Number($('count').value);
+  const count = selectedCount();
   const isLarge = count > 10;
   const isFinalExam = count >= 100 || category === 'All 4 Subjects (Final Mock Exam)';
 
@@ -154,15 +184,20 @@ function modeChanged() {
   }
   $('generate').disabled = ai || busy;
   $('focus').disabled = true;
+  updateBankCount();
 
 }
 
 // ── Event wiring ──────────────────────────────────────────────────────────────
-$('level').onchange = renderCategories;
+$('level').onchange = () => { renderCategories(); modeChanged(); };
+$('difficulty').onchange = modeChanged;
+$('bank-count').oninput = () => { $('generate').disabled = busy || !bankAvailable || !$('bank-count').checkValidity(); };
+document.addEventListener('bank-updated', () => { bankFilterKey = ''; modeChanged(); });
 $('mode').onchange  = modeChanged;
 $('count').onchange = modeChanged;
 
 $('nav-multiplayer').onclick = () => leaveQuiz('multiplayer');
+$('admin-link').onclick = e => { e.preventDefault(); leaveQuiz('admin'); };
 $('nav-create').onclick = $('back').onclick = () => leaveQuiz('create');
 $('nav-library').onclick = () => leaveQuiz('library');
 
@@ -259,7 +294,7 @@ $('generate-form').onsubmit = async e => {
   if (busy) return;
   notice('');
 
-  const count = Number($('count').value);
+  const count = selectedCount();
   const mode = $('mode').value;
 
   if (mode === 'bank') {
@@ -515,7 +550,7 @@ api('/session')
     modeChanged();
     await library();
   })
-  .then(() => { modeChanged(); document.dispatchEvent(new Event('study-ready')); if (new URLSearchParams(location.search).get('view') === 'multiplayer') view('multiplayer'); })
+  .then(() => { modeChanged(); document.dispatchEvent(new Event('study-ready')); const requestedView = new URLSearchParams(location.search).get('view'); if (['multiplayer', 'admin'].includes(requestedView)) view(requestedView); })
   .catch(e => notice(e.message));
 
 $('logout').onclick = async () => {

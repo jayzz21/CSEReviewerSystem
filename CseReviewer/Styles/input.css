@@ -190,3 +190,17 @@
 /* Theme toggle button */
 .dark .theme-toggle { color: var(--dark-muted); }
 .dark .theme-toggle:hover { background-color: var(--dark-surface); }
+
+/* Imported bank counts: scroll within the card on smaller screens. */
+.bank-table-scroll { overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 12px; }
+.bank-table { width: 100%; border-collapse: collapse; color: #334155; }
+.bank-table caption { text-align: left; padding: 16px; font-weight: 600; }
+.bank-table th, .bank-table td { padding: 12px 16px; border-top: 1px solid #e2e8f0; text-align: right; font-variant-numeric: tabular-nums; }
+.bank-table th:first-child { text-align: left; min-width: 190px; }
+.bank-table thead, .bank-table tfoot { background: #f8fafc; font-weight: 600; }
+.bank-table tbody th { font-weight: 500; }
+.bank-table td:last-child { font-weight: 700; }
+.dark .bank-table-scroll, .dark .bank-table th, .dark .bank-table td { border-color: var(--dark-border); }
+.dark .bank-table { color: var(--dark-text); }
+.dark .bank-table thead, .dark .bank-table tfoot { background: var(--dark-teal-bg); }
+.dark .bank-table caption { color: var(--dark-teal); }
