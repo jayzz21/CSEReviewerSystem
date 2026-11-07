@@ -51,6 +51,7 @@ using (var scope = app.Services.CreateScope()) {
     var db = scope.ServiceProvider.GetRequiredService<StudyDb>();
     await db.Database.EnsureCreatedAsync();
     await db.Database.ExecuteSqlRawAsync(db.Database.IsSqlServer() ? AccountSchema.SqlServer : AccountSchema.Postgres);
+    await db.Database.ExecuteSqlRawAsync(db.Database.IsSqlServer() ? Multiplayer.SqlServer : Multiplayer.Postgres);
     if (!await db.AccountProfiles.AnyAsync(p => p.Id == "local-super-admin")) {
         var sa = new AccountProfile { Id = "local-super-admin", Username = "sa", Role = "SuperAdmin", MustChangePassword = true };
         sa.PasswordHash = new Microsoft.AspNetCore.Identity.PasswordHasher<AccountProfile>().HashPassword(sa, "123");
@@ -88,11 +89,14 @@ app.Use(async (c, next) => {
     var path = c.Request.Path.Value;
     if (path == "/" || string.Equals(path, "/index.html", StringComparison.OrdinalIgnoreCase) || string.Equals(path, "/admin.html", StringComparison.OrdinalIgnoreCase)) {
         c.Response.Headers.CacheControl = "no-store";
+        var lobbyCode = c.Request.Query["code"].ToString();
+        var lobbyReturn = c.Request.Query["view"] == "multiplayer" && lobbyCode.Length == 10 && lobbyCode.All(Uri.IsHexDigit)
+            ? "lobby=" + lobbyCode.ToUpperInvariant() : "";
         if (c.User.Identity?.IsAuthenticated != true) {
-            c.Response.Redirect("/login.html"); return;
+            c.Response.Redirect("/login.html" + (lobbyReturn.Length > 0 ? "?" + lobbyReturn : "")); return;
         }
         if (c.User.HasClaim("must_change_password", "true")) {
-            c.Response.Redirect("/login.html?changePassword=1"); return;
+            c.Response.Redirect("/login.html?changePassword=1" + (lobbyReturn.Length > 0 ? "&" + lobbyReturn : "")); return;
         }
         if (string.Equals(path, "/admin.html", StringComparison.OrdinalIgnoreCase) && !c.User.IsInRole("Admin") && !c.User.IsInRole("SuperAdmin")) {
             c.Response.Redirect("/"); return;
@@ -117,6 +121,7 @@ app.MapGet("/api/config", () => new { categories = Catalog.Categories, provider 
 var api = app.MapGroup("/api").RequireAuthorization();
 ImportedBank.Map(api);
 PracticeProgress.Map(api);
+Multiplayer.Map(api);
 
 api.MapGet("/sets", async (StudyDb db, HttpContext c) => await db.Sets.Where(s => s.Owner == c.User.FindFirstValue(ClaimTypes.NameIdentifier)! && s.Saved).OrderByDescending(s => s.Created).Select(s => new { s.Id, s.Title, s.Category, s.Level, s.Difficulty, s.Count, s.Source, s.Created }).ToListAsync());
 api.MapPost("/sets", async (GenerateRequest r, StudyDb db, QuestionGenerator generator, HttpContext c) => {

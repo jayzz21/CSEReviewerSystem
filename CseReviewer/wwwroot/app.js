@@ -81,10 +81,13 @@ $('theme-toggle').onclick = () => {
 
 // ── View switching ────────────────────────────────────────────────────────────
 function view(name) {
-  ['create', 'library', 'quiz'].forEach(v =>
+  ['create', 'library', 'quiz', 'multiplayer'].forEach(v =>
     $(v + '-view').classList.toggle('hidden', v !== name)
   );
-  $('nav-create').classList.toggle('active', name !== 'library');
+  $('nav-create').classList.toggle('active', name === 'create' || name === 'quiz');
+  $('nav-multiplayer').classList.toggle('active', name === 'multiplayer');
+  if (name === 'multiplayer') window.HusayMultiplayer.enter();
+  else if (new URLSearchParams(location.search).get('view') === 'multiplayer') history.replaceState(null, '', '/');
   $('nav-library').classList.toggle('active', name === 'library');
   notice('');
 }
@@ -159,6 +162,7 @@ $('level').onchange = renderCategories;
 $('mode').onchange  = modeChanged;
 $('count').onchange = modeChanged;
 
+$('nav-multiplayer').onclick = () => leaveQuiz('multiplayer');
 $('nav-create').onclick = $('back').onclick = () => leaveQuiz('create');
 $('nav-library').onclick = () => leaveQuiz('library');
 
@@ -511,7 +515,7 @@ api('/session')
     modeChanged();
     await library();
   })
-  .then(() => { modeChanged(); document.dispatchEvent(new Event('study-ready')); })
+  .then(() => { modeChanged(); document.dispatchEvent(new Event('study-ready')); if (new URLSearchParams(location.search).get('view') === 'multiplayer') view('multiplayer'); })
   .catch(e => notice(e.message));
 
 $('logout').onclick = async () => {

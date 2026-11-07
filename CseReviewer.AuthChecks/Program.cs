@@ -46,6 +46,7 @@ try {
     var home = await sa.GetAsync("/");
     Check(home.StatusCode == HttpStatusCode.Redirect && home.Headers.Location?.ToString() == "/login.html", "Front page redirects anonymous visitors to login without JavaScript");
     Check((await sa.GetAsync("/index.html")).StatusCode == HttpStatusCode.Redirect, "Direct reviewer page also requires login");
+    Check((await sa.GetAsync("/?view=multiplayer&code=AABBCCDDEE")).Headers.Location?.ToString() == "/login.html?lobby=AABBCCDDEE", "Shared lobby survives the signed-out front-page redirect");
     Check((await sa.GetStringAsync("/login.html")).Contains("id=\"login-form\""), "Login UI is served publicly");
     Check((await sa.GetAsync("/api/sets")).StatusCode == HttpStatusCode.Unauthorized, "Anonymous study access denied");
     Check((await sa.PostAsJsonAsync("/api/session", new { })).StatusCode == HttpStatusCode.Unauthorized, "Legacy POST session requires login instead of returning 405");
@@ -100,6 +101,9 @@ try {
     Check((await migrated.PostAsJsonAsync("/api/auth/login", new { login = "user_b", password = "Temporary-password-42!" })).IsSuccessStatusCode, "Existing account signs in after password reset");
     Check((await migrated.GetAsync("/api/sets")).StatusCode == HttpStatusCode.Forbidden, "Reset account must change temporary password");
     Check((await migrated.PostAsJsonAsync("/api/auth/change-password", new { currentPassword = "Temporary-password-42!", newPassword = "Personal-password-84!" })).IsSuccessStatusCode, "Regular user replaces temporary password");
+    using var multiplayerHost = Client("test-user-a");
+    using var multiplayerGuest = Client("test-user-b");
+    await MultiplayerChecks.Run(db, multiplayerHost, multiplayerGuest, registered, Check);
 
 } finally {
     if (!server.HasExited) { server.Kill(); await server.WaitForExitAsync(); }
