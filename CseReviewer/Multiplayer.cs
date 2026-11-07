@@ -49,8 +49,8 @@ public static class Multiplayer {
         """;
     public static void Map(RouteGroupBuilder api) {
         api.MapPost("/lobbies", async (CreateLobby r, StudyDb db, HttpContext c) => {
-            if (r.Mode is not ("test" or "speed") || r.Count is < 30 or > 180 || r.Minutes is < 1 or > 5 || r.Level is not ("Professional" or "Subprofessional") || !Catalog.Categories.Contains(r.Category) || (r.Category == "Clerical Ability" && r.Level != "Subprofessional") || (r.Category == "Analytical Ability" && r.Level != "Professional"))
-                return Results.BadRequest(new { error = "Choose a valid category, level, mode, 30–180 questions and 1–5 minutes." });
+            if (r.Mode is not ("test" or "speed") || r.Count is < 30 or > 180 || r.Minutes < 1 || r.Level is not ("Professional" or "Subprofessional") || !Catalog.Categories.Contains(r.Category) || (r.Category == "Clerical Ability" && r.Level != "Subprofessional") || (r.Category == "Analytical Ability" && r.Level != "Professional"))
+                return Results.BadRequest(new { error = "Choose a valid category, level, mode, 30–180 questions and a positive whole number of minutes." });
             var categories = ImportedBank.GetTargetCategories(r.Category, r.Level);
             var rows = await db.BankQuestions.AsNoTracking().Where(q => categories.Contains(q.Category) && (q.Level == r.Level || q.Level == "Both")).ToListAsync();
             var questions = new List<LobbyQuestion>();

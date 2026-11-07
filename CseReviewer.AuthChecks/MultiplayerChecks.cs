@@ -13,8 +13,8 @@ public static class MultiplayerChecks {
             }
         await db.SaveChangesAsync();
         async Task<JsonElement> State(HttpClient client, string code) => await client.GetFromJsonAsync<JsonElement>("/api/lobbies/" + code);
-        async Task<string> Create(string mode, string category = "Numerical Ability", int count = 30) {
-            var result = await host.PostAsJsonAsync("/api/lobbies", new { category, level = "Professional", mode, count, minutes = 1 });
+        async Task<string> Create(string mode, string category = "Numerical Ability", int count = 30, int minutes = 1) {
+            var result = await host.PostAsJsonAsync("/api/lobbies", new { category, level = "Professional", mode, count, minutes });
             result.EnsureSuccessStatusCode(); return (await result.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString()!;
         }
         async Task<LobbyState> Stored(string code) {
@@ -32,6 +32,14 @@ public static class MultiplayerChecks {
         }
         var invalid = await host.PostAsJsonAsync("/api/lobbies", new { category = "Numerical Ability", level = "Professional", mode = "speed", count = 29, minutes = 6 });
         check(invalid.StatusCode == HttpStatusCode.BadRequest, "Lobby enforces question and timer limits");
+        foreach (var mode in new[] { "test", "speed" }) {
+            var longGame = await Create(mode, minutes: 120);
+            await Start(longGame);
+            var longState = await Stored(longGame);
+            check(longState.Minutes == 120 && longState.Deadline > DateTime.UtcNow.AddMinutes(119), $"{mode} accepts a custom 120-minute timer");
+            foreach (var minutes in new[] { 0, -1 })
+                check((await host.PostAsJsonAsync("/api/lobbies", new { category = "Numerical Ability", level = "Professional", mode, count = 30, minutes })).StatusCode == HttpStatusCode.BadRequest, $"{mode} rejects nonpositive timer {minutes}");
+        }
         var full = await Create("test", "All 4 Subjects (Final Mock Exam)", 180);
         check((await State(host, full)).GetProperty("breakdown").EnumerateArray().All(x => x.GetProperty("count").GetInt32() == 45), "Full 180-question exam covers four categories evenly");
         var code = await Create("test");

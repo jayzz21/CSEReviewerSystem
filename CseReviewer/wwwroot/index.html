@@ -81,7 +81,7 @@
 <label class="block">Category<select id="mp-category"></select></label>
 <label class="block">Game mode<select id="mp-mode"><option value="test">Timed test · most correct wins</option><option value="speed">Speed rounds · first correct wins</option></select></label>
 <label class="block">Number of questions<input id="mp-count" type="number" min="30" max="180" step="1" value="30" required></label>
-<label class="block"><span id="mp-timer-label">Minutes for the entire test</span><input id="mp-minutes" type="number" min="1" max="5" step="1" value="3" required></label>
+<label class="block"><span id="mp-timer-label">Minutes for the entire test</span><input id="mp-minutes" type="number" min="1" step="1" value="3" required><span class="text-sm muted">Enter any positive whole number of minutes, such as 10, 30, or 120.</span></label>
 <p id="mp-rules" class="text-sm text-slate-500"></p><button class="primary" type="submit">Create lobby</button>
 </form></section>
 <section class="panel p-6"><h2 class="text-xl font-bold">Join your friends</h2><form id="mp-join-form" class="space-y-4 mt-4"><label class="block">Lobby code<input id="mp-join-code" maxlength="10" pattern="[a-fA-F0-9]{10}" required autocomplete="off"></label><button class="primary" type="submit">Join lobby</button></form><p class="mt-6 text-slate-500">2–20 signed-in players. Everyone receives the same questions. Only the host starts the match once all players are ready.</p><p class="mt-4 text-sm text-slate-500">Need a break? Keep your lobby link to reconnect. The server clock continues if you disconnect.</p></section>
