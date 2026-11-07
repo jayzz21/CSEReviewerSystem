@@ -2,6 +2,7 @@
 const $ = id => document.getElementById('mp-' + id);
 const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let room = null, busy = false, stopped = false, offset = 0, gameKey = '', selected = null;
+let waitingForHost = false;
 let code = new URLSearchParams(location.search).get('code')?.trim().toUpperCase() || '';
 function message(text) { $('message').textContent = text; }
 function login() {
@@ -31,7 +32,7 @@ async function action(work) {
   try { await work(); } catch (e) { message(e.message); } finally { busy = false; }
 }
 function openRoom(data) {
-  room = data; code = data.code; stopped = false;
+  room = data; code = data.code; stopped = false; gameKey = ''; waitingForHost = false;
   history.replaceState(null, '', '/?view=multiplayer&code=' + code);
   $('setup').hidden = true; $('room').hidden = false;
   $('code').textContent = code; $('share-link').value = location.origin + '/?view=multiplayer&code=' + code;
@@ -43,29 +44,43 @@ $('create-form').onsubmit = e => { e.preventDefault(); action(async () => {
 }); };
 $('join-form').onsubmit = e => { e.preventDefault(); action(async () => { code = $('join-code').value.trim().toUpperCase(); openRoom(await api('/lobbies/' + code + '/join', {})); }); };
 $('copy').onclick = () => action(async () => { try { await navigator.clipboard.writeText($('share-link').value); message('Lobby link copied.'); } catch { $('share-link').select(); message('Select and copy the lobby link above.'); } });
-for (const id of ['ready','start','cancel','leave']) $(id).onclick = () => action(async () => {
-  if (id === 'cancel' && !confirm('Cancel the match for everyone?')) return;
+for (const id of ['ready','start','cancel','leave','replay']) $(id).onclick = () => action(async () => {
+  if (id === 'replay') {
+    if (room.host !== room.me) { waitingForHost = true; gameKey = ''; render(room); return; }
+    render(await api('/lobbies/' + code + '/replay', { game: room.game }));
+    return;
+  }
+  if (id === 'cancel' && !confirm('Close this lobby for everyone? Players will be returned to the main screen.')) return;
+  if (id === 'leave' && room.status === 'finished' && room.host === room.me && !confirm('Leave and close the lobby? All players will be disconnected.')) return;
   const data = await api('/lobbies/' + code + '/' + id, id === 'ready' ? { ready: !room.ready } : {});
-  if (id === 'leave') { room = null; code = ''; gameKey = ''; history.replaceState(null,'','/?view=multiplayer'); $('room').hidden = true; $('setup').hidden = false; }
-  else render(data);
+  if (id === 'leave' || (id === 'cancel' && data.status === 'cancelled')) {
+    room = null; code = ''; gameKey = ''; stopped = true;
+    history.replaceState(null,'','/?view=multiplayer'); $('room').hidden = true; $('setup').hidden = false;
+  } else render(data);
 });
 function render(s) {
   if (room?.code === s.code && Date.parse(s.serverTime) < Date.parse(room.serverTime)) return;
   room = s; offset = Date.parse(s.serverTime) - Date.now();
+  if (s.status !== 'finished') waitingForHost = false;
   const waiting = s.status === 'waiting', host = s.host === s.me;
-  $('settings').textContent = `${s.level} · ${s.category} · ${s.count} questions · ${s.mode === 'speed' ? 'Speed rounds' : 'Timed test'} · ${s.minutes} min ${s.mode === 'speed' ? 'per question' : 'total'}`;
+  $('settings').textContent = `Game ${s.game} · ${s.level} · ${s.category} · ${s.count} questions · ${s.mode === 'speed' ? 'Speed rounds' : 'Timed test'} · ${s.minutes} min ${s.mode === 'speed' ? 'per question' : 'total'}`;
   $('breakdown').textContent = s.breakdown.map(x => `${x.category}: ${x.count}`).join(' · ');
   $('ready').hidden = !waiting; $('ready').textContent = s.ready ? 'Not ready' : 'I am ready';
   $('start').hidden = !waiting || !host; $('start').disabled = s.players.length < 2 || s.players.some(p => !p.ready);
-  $('leave').hidden = !waiting; $('cancel').hidden = !host || !['playing','waiting'].includes(s.status);
+  $('leave').hidden = s.status === 'playing' || s.status === 'cancelled';
+  $('leave').textContent = s.status === 'finished' ? (host ? 'Close lobby & leave' : 'Leave lobby') : 'Leave lobby';
+  $('cancel').hidden = !host || s.status === 'playing' || s.status === 'cancelled' || s.status === 'finished';
+  $('replay').hidden = s.status !== 'finished' || waitingForHost;
+  $('replay').textContent = host ? '🎮 New game · back to lobby' : '🔄 Back to lobby';
   $('players').innerHTML = s.players.map(p => `<p><strong>${escapeHtml(p.name)}</strong>${p.id === s.host ? ' · Host' : ''}${p.id === s.me ? ' · You' : ''} — ${waiting ? (p.ready ? 'Ready' : 'Not ready') : `${p.answered} answered${p.score === null ? '' : ` · ${p.score} points`}`}</p>`).join('');
-  const key = [s.status, s.index, s.answered, s.nextRoundAt].join('|');
+  const key = [s.game, s.status, s.index, s.answered, s.nextRoundAt, waitingForHost].join('|');
   if (key === gameKey) return; gameKey = key; selected = null;
   if (waiting) { $('game').textContent = 'Share the link or code. The host can start when at least two players are ready.'; return; }
   if (s.status === 'cancelled') { $('game').innerHTML = '<h2 class="text-xl font-bold">Lobby closed</h2><a class="secondary mt-4" href="/?view=multiplayer">Create or join another lobby</a>'; return; }
   if (s.status === 'finished') {
+    if (waitingForHost) { $('game').textContent = 'Waiting for the host to open the next game. Stay here — the same lobby link and players will be kept. You will need to mark yourself ready again.'; return; }
     const names = s.players.filter(p => s.winners.includes(p.id)).map(p => p.name).join(', ');
-    $('game').innerHTML = `<h2 class="text-2xl font-bold">${s.winners.length === 0 ? 'Match finished — no winning score' : `${s.winners.length > 1 ? 'Draw' : 'Winner'}: ${escapeHtml(names)}`}</h2><a class="secondary mt-4" href="/?view=multiplayer">Play another match</a><h3 class="font-bold mt-6">Your answer review</h3>` + s.results.map(r => `<details class="mt-4"><summary>${r.index + 1}. ${escapeHtml(r.question.prompt)}</summary><p>Your answer: ${r.choice === null ? 'Not answered' : escapeHtml(r.question.options[r.choice])}</p><p>Correct: ${escapeHtml(r.question.options[r.question.answer])}</p><p>${escapeHtml(r.question.explanation)}</p>${r.question.steps.map(step => `<p>${escapeHtml(step)}</p>`).join('')}</details>`).join(''); return;
+    $('game').innerHTML = `<h2 class="text-2xl font-bold">${s.winners.length === 0 ? 'Match finished — no winning score' : `${s.winners.length > 1 ? 'Draw' : 'Winner'}: ${escapeHtml(names)}`}</h2><p class="mt-4">${host ? '🎮 Use <strong>New game · back to lobby</strong> to restart with the same players and a reshuffled question set. Use <strong>Close lobby &amp; leave</strong> when done.' : '🔄 Choose <strong>Back to lobby</strong> to wait for the host to start another game, or <strong>Leave lobby</strong> to exit.'}</p><h3 class="font-bold mt-6">Your answer review</h3>` + s.results.map(r => `<details class="mt-4"><summary>${r.index + 1}. ${escapeHtml(r.question.prompt)}</summary><p>Your answer: ${r.choice === null ? 'Not answered' : escapeHtml(r.question.options[r.choice])}</p><p>Correct: ${escapeHtml(r.question.options[r.question.answer])}</p><p>${escapeHtml(r.question.explanation)}</p>${r.question.steps.map(step => `<p>${escapeHtml(step)}</p>`).join('')}</details>`).join(''); return;
   }
   if (s.review) {
     const q = s.review.question.question, winner = s.players.find(p => p.id === s.review.result.winner);
@@ -77,7 +92,7 @@ function render(s) {
   $('submit-answer').onclick = () => action(async () => {
     if (selected === null) return;
     $('submit-answer').disabled = true;
-    try { render(await api('/lobbies/' + code + '/answer', { index: s.index, choice: selected })); }
+    try { render(await api('/lobbies/' + code + '/answer', { index: s.index, choice: selected, game: s.game })); }
     finally { if ($('submit-answer')) $('submit-answer').disabled = selected === null || room.answered; }
   });
 }
@@ -88,7 +103,7 @@ setInterval(() => {
   $('timer').textContent = room.status !== 'playing' ? room.status.toUpperCase() : `${room.nextRoundAt ? 'Next round in ' : 'Time left '}${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2,'0')}`;
 }, 250);
 async function poll() {
-  try { if (room && !busy && !stopped && !document.getElementById('multiplayer-view').classList.contains('hidden')) { render(await api('/lobbies/' + code)); if (['finished','cancelled'].includes(room.status)) stopped = true; } }
+  try { if (room && !busy && !stopped && !document.getElementById('multiplayer-view').classList.contains('hidden')) { render(await api('/lobbies/' + code)); if (room.status === 'cancelled') stopped = true; } }
   catch (e) { message('Connection interrupted. Reconnecting… ' + e.message); }
   finally { setTimeout(poll, 1500); }
 }
