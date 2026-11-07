@@ -28,6 +28,8 @@ builder.Services.AddAuthentication("study").AddCookie("study", o => {
         var profile = id == null ? null : await db.AccountProfiles.FindAsync(id);
         if (c.Principal?.FindFirstValue("verified_account") != "true" || profile == null) { c.RejectPrincipal(); return; }
         var identity = (ClaimsIdentity)c.Principal.Identity!;
+        foreach (var name in identity.FindAll(ClaimTypes.Name).ToList()) identity.RemoveClaim(name);
+        identity.AddClaim(new Claim(ClaimTypes.Name, profile.Username));
         foreach (var role in identity.FindAll(ClaimTypes.Role).ToList()) identity.RemoveClaim(role);
         identity.AddClaim(new Claim(ClaimTypes.Role, profile.Role));
         if (profile.MustChangePassword) identity.AddClaim(new Claim("must_change_password", "true"));

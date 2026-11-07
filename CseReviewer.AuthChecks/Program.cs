@@ -104,6 +104,38 @@ try {
     using var multiplayerHost = Client("test-user-a");
     using var multiplayerGuest = Client("test-user-b");
     await MultiplayerChecks.Run(db, multiplayerHost, multiplayerGuest, registered, Check);
+    Check((await multiplayerHost.PostAsJsonAsync("/api/admin/users/test-user-b/username", new { username = "renamed_user" })).StatusCode == HttpStatusCode.Forbidden, "Ordinary users cannot rename accounts");
+    Check((await sa.PostAsJsonAsync("/api/admin/users/test-user-b/username", new { username = "sa" })).StatusCode == HttpStatusCode.BadRequest, "Reserved admin username is protected");
+    Check((await sa.PostAsJsonAsync("/api/admin/users/test-user-b/username", new { username = "new_student" })).StatusCode == HttpStatusCode.Conflict, "Duplicate username is rejected");
+    (await sa.PostAsJsonAsync("/api/admin/users/test-user-b/username", new { username = "Renamed_User" })).EnsureSuccessStatusCode();
+    Check((await multiplayerGuest.GetFromJsonAsync<JsonElement>("/api/session")).GetProperty("username").GetString() == "renamed_user", "Renamed username is normalized and visible in existing sessions");
+    Check((await migrated.PostAsJsonAsync("/api/auth/login", new { login = "renamed_user", password = "Personal-password-84!" })).IsSuccessStatusCode, "Renaming preserves password and permits login with the new username");
+    Check((await multiplayerHost.PostAsJsonAsync("/api/admin/users/test-user-b/update", new { username = "changed_user", role = "Admin", password = "" })).StatusCode == HttpStatusCode.Forbidden, "Combined account updates require Super Admin");
+    Check((await sa.PostAsJsonAsync("/api/admin/users/test-user-b/update", new { username = "changed_user", role = "Admin", password = "short" })).StatusCode == HttpStatusCode.BadRequest, "Invalid password rejects the complete account update");
+    var beforeUpdate = await db.AccountProfiles.AsNoTracking().SingleAsync(p => p.Id == "test-user-b");
+    Check(beforeUpdate.Username == "renamed_user" && beforeUpdate.Role == "User", "Failed update leaves username and role unchanged");
+    (await sa.PostAsJsonAsync("/api/admin/users/test-user-b/update", new { username = "changed_user", role = "Admin", password = "" })).EnsureSuccessStatusCode();
+    var afterUpdate = await db.AccountProfiles.AsNoTracking().SingleAsync(p => p.Id == "test-user-b");
+    Check(afterUpdate.Username == "changed_user" && afterUpdate.Role == "Admin" && afterUpdate.PasswordHash == beforeUpdate.PasswordHash, "Single save updates username and role while blank password preserves the hash");
+    (await sa.PostAsJsonAsync("/api/admin/users/test-user-b/update", new { username = "changed_user", role = "User", password = "New-temporary-password-42!" })).EnsureSuccessStatusCode();
+    afterUpdate = await db.AccountProfiles.AsNoTracking().SingleAsync(p => p.Id == "test-user-b");
+    Check(afterUpdate.MustChangePassword && afterUpdate.PasswordHash != beforeUpdate.PasswordHash && afterUpdate.Role == "User", "Single save can reset password and require a change at next sign-in");
+    foreach (var difficulty in new[] { "Moderate", "Hard" })
+        for (var i = 0; i < 6; i++) {
+            var entry = new ImportEntry("Numerical Ability", "Professional", difficulty, $"Mixed check {difficulty} {i}", ["A", "B", "C", "D"], 0, "Explanation", []);
+            db.BankQuestions.Add(new BankQuestion { Owner = "test-bank", Fingerprint = HtmlImport.Fingerprint(entry), Category = entry.Category, Level = entry.Level, Difficulty = difficulty, Data = JsonSerializer.Serialize(entry) });
+        }
+    await db.SaveChangesAsync();
+    async Task<int> Available(string difficulty, string category = "Numerical Ability") {
+        var response = await multiplayerHost.PostAsJsonAsync("/api/bank/check", new { category, level = "Professional", difficulty, count = 1 });
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("available").GetInt32();
+    }
+    Check(await Available("Mixed") == 57 && await Available("Easy") == 45 && await Available("Hard") == 6, "Bank counts respect Mixed and individual difficulty filters");
+    Check(await Available("Hard", "Verbal Ability") == 0, "Empty difficulty does not fall back to other questions");
+    var largeBankSet = await multiplayerHost.PostAsJsonAsync("/api/bank/sets", new { category = "All 4 Subjects (Final Mock Exam)", level = "Professional", difficulty = "Mixed", count = 190 });
+    Check(largeBankSet.IsSuccessStatusCode && (await largeBankSet.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("count").GetInt32() == 190, "Database sets can exceed 180 when matching questions exist");
+    Check((await multiplayerHost.PostAsJsonAsync("/api/bank/sets", new { category = "Numerical Ability", level = "Professional", difficulty = "Hard", count = 7 })).StatusCode == HttpStatusCode.BadRequest, "Database rejects requests above matching difficulty availability");
 
 } finally {
     if (!server.HasExited) { server.Kill(); await server.WaitForExitAsync(); }

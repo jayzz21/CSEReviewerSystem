@@ -2,8 +2,45 @@
 let pendingImport = null, importVersion = 0;
 async function refreshImportedBank() {
   const rows = await api('/bank');
+  document.dispatchEvent(new Event('bank-updated'));
   $('bank-total').textContent = rows.reduce((total, row) => total + row.count, 0).toLocaleString();
-  $('bank-summary').textContent = rows.length ? 'Your imported bank: ' + rows.map(r => `${r.category} / ${r.difficulty}: ${r.count}`).join(' · ') : 'Your imported bank is empty. Choose a file to preview it.';
+  const summary = $('bank-summary');
+  summary.replaceChildren();
+  if (!rows.length) { summary.textContent = 'Your imported bank is empty. Choose a file to preview it.'; return; }
+  const difficulties = ['Easy', 'Moderate', 'Hard'];
+  for (const row of rows) if (!difficulties.includes(row.difficulty)) difficulties.push(row.difficulty);
+  const subjects = new Map();
+  for (const row of rows) {
+    if (!subjects.has(row.category)) subjects.set(row.category, new Map());
+    const counts = subjects.get(row.category);
+    counts.set(row.difficulty, (counts.get(row.difficulty) || 0) + row.count);
+  }
+  const table = document.createElement('table');
+  table.className = 'bank-table';
+  const caption = table.createCaption();
+  caption.textContent = 'Imported question bank · all exam levels';
+  const addCell = (row, tag, text, scope) => {
+    const cell = document.createElement(tag); cell.textContent = text;
+    if (scope) cell.scope = scope;
+    row.append(cell);
+  };
+  const header = table.createTHead().insertRow();
+  for (const title of ['Subject', ...difficulties, 'Total']) addCell(header, 'th', title, 'col');
+  const body = table.createTBody();
+  for (const [subject, counts] of [...subjects].sort(([a], [b]) => a.localeCompare(b))) {
+    const row = body.insertRow();
+    addCell(row, 'th', subject, 'row');
+    for (const difficulty of difficulties) addCell(row, 'td', (counts.get(difficulty) || 0).toLocaleString());
+    addCell(row, 'td', [...counts.values()].reduce((sum, count) => sum + count, 0).toLocaleString());
+  }
+  const total = table.createTFoot().insertRow();
+  addCell(total, 'th', 'Total questions', 'row');
+  for (const difficulty of difficulties) addCell(total, 'td', rows.filter(r => r.difficulty === difficulty).reduce((sum, r) => sum + r.count, 0).toLocaleString());
+  addCell(total, 'td', rows.reduce((sum, r) => sum + r.count, 0).toLocaleString());
+  const scroll = document.createElement('div');
+  scroll.className = 'bank-table-scroll'; scroll.tabIndex = 0;
+  scroll.setAttribute('role', 'region'); scroll.setAttribute('aria-label', 'Question counts by subject and difficulty');
+  scroll.append(table); summary.append(scroll);
 }
 async function previewImport(file) {
   const version = ++importVersion;
