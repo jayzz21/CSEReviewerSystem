@@ -13,7 +13,7 @@ async function request(path, data) {
 function form(id, action) {
   el(id).onsubmit = async e => {
     e.preventDefault(); if (submitting) return; submitting = true;
-    const button = e.target.querySelector('button'); button.disabled = true; el('auth-message').textContent = '';
+    const button = e.target.querySelector('button[type="submit"]'); button.disabled = true; el('auth-message').textContent = '';
     try { await action(); } catch (e) { el('auth-message').textContent = e.message; }
     finally { submitting = false; button.disabled = false; }
   };
@@ -37,6 +37,20 @@ el('toggle-register').onclick = () => {
   el('toggle-register').textContent = registering ? 'Already registered? Sign in' : 'New here? Create an account';
   el('auth-message').textContent = '';
 };
+function setupPasswordToggles() {
+  document.querySelectorAll('.password-toggle').forEach(toggle => {
+    toggle.onclick = () => {
+      const input = el(toggle.dataset.target);
+      const isShowing = input.type === 'password';
+      input.type = isShowing ? 'text' : 'password';
+      toggle.querySelector('.eye-open').classList.toggle('hidden', isShowing);
+      toggle.querySelector('.eye-closed').classList.toggle('hidden', !isShowing);
+      toggle.setAttribute('aria-label', isShowing ? 'Hide password' : 'Show password');
+      toggle.setAttribute('aria-pressed', String(isShowing));
+    };
+  });
+}
+setupPasswordToggles();
 const params = new URLSearchParams(location.search);
 if (params.has('changePassword')) showChange();
 if (location.hash) history.replaceState(null, '', '/login.html');
