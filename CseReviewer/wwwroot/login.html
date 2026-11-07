@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in · Husay</title><link rel="stylesheet" href="/app.css"><script src="/login.js?v=username-1" defer></script></head>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in · Husay</title><link rel="stylesheet" href="/app.css"><script src="/login.js?v=password-toggle-1" defer></script></head>
 <body class="bg-slate-50 text-slate-800">
 <main class="max-w-6xl mx-auto p-6 lg:p-12">
   <a href="/" class="text-3xl font-bold text-teal-800">h. husay</a>
@@ -10,18 +10,55 @@
       <p id="auth-message" class="mt-4 text-sm" role="status" aria-live="polite"></p>
       <form id="login-form" class="space-y-4 mt-6">
         <label class="block">Username<input id="login-name" autocomplete="username" required maxlength="254"></label>
-        <label class="block">Password<input id="login-password" type="password" autocomplete="current-password" required maxlength="128"></label>
+        <div>
+          <label for="login-password" class="block">Password</label>
+          <div class="password-field">
+            <input id="login-password" type="password" autocomplete="current-password" required maxlength="128">
+            <button type="button" class="password-toggle" data-target="login-password" aria-label="Show password" aria-pressed="false">
+              <svg class="eye-open" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+              <svg class="eye-closed hidden" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 19c-6.5 0-10-7-10-7a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c6.5 0 10 7 10 7a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+            </button>
+          </div>
+        </div>
         <button class="primary" type="submit">Sign in →</button>
       </form>
       <form id="register-form" class="space-y-4 mt-6 hidden">
         <label class="block">Username<input id="register-name" autocomplete="username" pattern="[A-Za-z0-9_]{3,30}" minlength="3" maxlength="30" required><span class="text-xs text-slate-500">3–30 letters, numbers or underscores.</span></label>
-        <label class="block">Password<input id="register-password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required><span class="text-xs text-slate-500">At least 12 characters.</span></label>
+        <div>
+          <label for="register-password" class="block">Password</label>
+          <div class="password-field">
+            <input id="register-password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required>
+            <button type="button" class="password-toggle" data-target="register-password" aria-label="Show password" aria-pressed="false">
+              <svg class="eye-open" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+              <svg class="eye-closed hidden" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 19c-6.5 0-10-7-10-7a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c6.5 0 10 7 10 7a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+            </button>
+          </div>
+          <span class="text-xs text-slate-500">At least 12 characters.</span>
+        </div>
         <button class="primary" type="submit">Create account</button>
       </form>
       <form id="change-form" class="space-y-4 mt-6 hidden">
         <p>Replace your temporary password before continuing.</p>
-        <label class="block">Current password<input id="current-password" type="password" autocomplete="current-password" required maxlength="128"></label>
-        <label class="block">New password<input id="new-password" type="password" autocomplete="new-password" required minlength="12" maxlength="128"></label>
+        <div>
+          <label for="current-password" class="block">Current password</label>
+          <div class="password-field">
+            <input id="current-password" type="password" autocomplete="current-password" required maxlength="128">
+            <button type="button" class="password-toggle" data-target="current-password" aria-label="Show password" aria-pressed="false">
+              <svg class="eye-open" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+              <svg class="eye-closed hidden" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 19c-6.5 0-10-7-10-7a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c6.5 0 10 7 10 7a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+            </button>
+          </div>
+        </div>
+        <div>
+          <label for="new-password" class="block">New password</label>
+          <div class="password-field">
+            <input id="new-password" type="password" autocomplete="new-password" required minlength="12" maxlength="128">
+            <button type="button" class="password-toggle" data-target="new-password" aria-label="Show password" aria-pressed="false">
+              <svg class="eye-open" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+              <svg class="eye-closed hidden" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 19c-6.5 0-10-7-10-7a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c6.5 0 10 7 10 7a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+            </button>
+          </div>
+        </div>
         <button class="primary" type="submit">Update password</button>
       </form>
       <div id="auth-options" class="space-y-4 mt-6">
