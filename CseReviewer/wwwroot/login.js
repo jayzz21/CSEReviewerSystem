@@ -1,3 +1,8 @@
+function afterLogin() {
+  const lobby = sessionStorage.getItem('husay-lobby');
+  sessionStorage.removeItem('husay-lobby');
+  location.replace(lobby && /^[A-F0-9]{10}$/.test(lobby) ? '/multiplayer.html?code=' + lobby : '/');
+}
 const el = id => document.getElementById(id);
 let submitting = false;
 function showChange() {
@@ -21,14 +26,14 @@ function form(id, action) {
 form('login-form', async () => {
   const result = await request('login', { login: el('login-name').value, password: el('login-password').value });
   el('login-password').value = '';
-  if (result.mustChangePassword) showChange(); else location.replace('/');
+  if (result.mustChangePassword) showChange(); else afterLogin();
 });
 form('register-form', async () => {
   const result = await request('register', { username: el('register-name').value, password: el('register-password').value });
   el('register-password').value = ''; el('auth-message').textContent = result.message;
 });
 form('change-form', async () => {
-  await request('change-password', { currentPassword: el('current-password').value, newPassword: el('new-password').value }); location.replace('/');
+  await request('change-password', { currentPassword: el('current-password').value, newPassword: el('new-password').value }); afterLogin();
 });
 el('toggle-register').onclick = () => {
   const registering = el('register-form').classList.contains('hidden');
@@ -52,5 +57,7 @@ function setupPasswordToggles() {
 }
 setupPasswordToggles();
 const params = new URLSearchParams(location.search);
+const pendingLobby = params.get('lobby')?.toUpperCase();
+if (pendingLobby && /^[A-F0-9]{10}$/.test(pendingLobby)) sessionStorage.setItem('husay-lobby', pendingLobby);
 if (params.has('changePassword')) showChange();
 if (location.hash) history.replaceState(null, '', '/login.html');

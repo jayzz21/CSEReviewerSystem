@@ -7,7 +7,10 @@ public class StudyDb(DbContextOptions<StudyDb> options) : DbContext(options), ID
     public DbSet<AccountProfile> AccountProfiles => Set<AccountProfile>();
     public DbSet<StudySet> Sets => Set<StudySet>();
     public DbSet<BankQuestion> BankQuestions => Set<BankQuestion>();
+    public DbSet<Lobby> Lobbies => Set<Lobby>();
     protected override void OnModelCreating(ModelBuilder b) {
+        b.Entity<Lobby>().HasKey(l => l.Code);
+        b.Entity<Lobby>().Property(l => l.Code).HasMaxLength(10);
         b.Entity<AccountProfile>().Property(p => p.Id).HasMaxLength(64);
         b.Entity<AccountProfile>().Property(p => p.Username).HasMaxLength(30);
         b.Entity<AccountProfile>().Property(p => p.Email).HasMaxLength(254);

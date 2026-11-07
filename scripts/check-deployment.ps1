@@ -8,7 +8,7 @@ try {
     }
     $deploymentConfig = Get-Content deploy/appsettings.json -Raw | ConvertFrom-Json
     if ($deploymentConfig.ConnectionStrings.Study) { throw 'Deployment settings must use the environment variable, not an embedded connection string.' }
-    foreach ($file in @('app.js','login.js','admin.js','import.js')) {
+    foreach ($file in @('app.js','login.js','admin.js','import.js','multiplayer.js','multiplayer-redirect.js')) {
         & node --check "CseReviewer/wwwroot/$file"
         if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax check failed: $file" }
     }

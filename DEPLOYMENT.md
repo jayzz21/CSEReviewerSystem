@@ -11,6 +11,8 @@ Render hosts the .NET app in Docker and gives it an HTTPS `onrender.com` URL. Su
 
 ## Deploy
 
+For the multiplayer update, also run `supabase-multiplayer-setup.sql` and see `MULTIPLAYER.md` for host/player instructions. No additional environment variables are required.
+
 Docker Desktop is not required on your PC for Render deployment. Render uses the included Dockerfile to build the image on its own servers.
 
 To check the files and Linux publish locally:

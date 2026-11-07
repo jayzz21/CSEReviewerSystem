@@ -18,7 +18,8 @@
       } catch (_) {}
     })();
   </script>
-  <script src="/app.js?v=database-mode-1" defer></script>
+  <script src="/app.js?v=shell-2" defer></script>
+  <script src="/multiplayer.js?v=shell-2" defer></script>
   <script src="/import.js?v=accounts-2" defer></script>
 </head>
 <body class="bg-slate-50 text-slate-800">
@@ -38,7 +39,7 @@
     <nav class="flex lg:flex-col gap-2">
       <button id="nav-create" class="nav active">✦ &nbsp; Create a reviewer</button>
       <button id="nav-library" class="nav">▤ &nbsp; My saved sets <span id="saved-count" class="ml-auto"></span></button>
-    <a id="admin-link" hidden class="nav" href="/admin.html">Administration</a><button id="logout" class="nav">Sign out</button></nav>
+    <button id="nav-multiplayer" class="nav">Multiplayer lobbies</button><a id="admin-link" hidden class="nav" href="/admin.html">Administration</a><button id="logout" class="nav">Sign out</button></nav>
 
     <div class="mt-8 lg:mt-auto rounded-2xl bg-teal-50 p-5">
       <p class="font-semibold text-teal-900">Small steps. Big progress.</p>
@@ -70,6 +71,29 @@
     <div class="max-w-6xl mx-auto p-6 lg:p-12">
 
       <div id="notice" role="status" aria-live="polite" class="hidden mb-6 rounded-xl p-4 bg-amber-50 text-amber-900"></div>
+
+<section id="multiplayer-view" class="hidden">
+<p class="eyebrow mt-6">PRACTICE TOGETHER</p><h1 class="text-3xl font-bold mt-3">Multiplayer challenge</h1>
+<p id="mp-message" role="status" aria-live="polite" class="mt-4"></p>
+<div id="mp-setup" hidden class="grid md:grid-cols-2 gap-7 mt-6">
+<section class="panel p-6"><h2 class="text-xl font-bold">Create a lobby</h2><form id="mp-create-form" class="space-y-4 mt-4">
+<label class="block">Exam level<select id="mp-level"><option>Professional</option><option>Subprofessional</option></select></label>
+<label class="block">Category<select id="mp-category"></select></label>
+<label class="block">Game mode<select id="mp-mode"><option value="test">Timed test · most correct wins</option><option value="speed">Speed rounds · first correct wins</option></select></label>
+<label class="block">Number of questions<input id="mp-count" type="number" min="30" max="180" step="1" value="30" required></label>
+<label class="block"><span id="mp-timer-label">Minutes for the entire test</span><input id="mp-minutes" type="number" min="1" max="5" step="1" value="3" required></label>
+<p id="mp-rules" class="text-sm text-slate-500"></p><button class="primary" type="submit">Create lobby</button>
+</form></section>
+<section class="panel p-6"><h2 class="text-xl font-bold">Join your friends</h2><form id="mp-join-form" class="space-y-4 mt-4"><label class="block">Lobby code<input id="mp-join-code" maxlength="10" pattern="[a-fA-F0-9]{10}" required autocomplete="off"></label><button class="primary" type="submit">Join lobby</button></form><p class="mt-6 text-slate-500">2–20 signed-in players. Everyone receives the same questions. Only the host starts the match once all players are ready.</p><p class="mt-4 text-sm text-slate-500">Need a break? Keep your lobby link to reconnect. The server clock continues if you disconnect.</p></section>
+</div>
+<section id="mp-room" hidden class="mt-6">
+<div class="panel p-6"><div class="flex flex-wrap justify-between gap-3"><h2 class="text-xl font-bold">Lobby <span id="mp-code"></span></h2><strong id="mp-timer" role="timer"></strong></div><p id="mp-settings" class="mt-3"></p><p id="mp-breakdown" class="mt-3 text-sm"></p>
+<div class="flex flex-wrap gap-3 mt-4"><input id="mp-share-link" readonly aria-label="Shareable lobby link"><button id="mp-copy" class="secondary">Copy link</button></div>
+<div id="mp-controls" class="flex flex-wrap gap-3 mt-4"><button id="mp-ready" class="secondary">Ready</button><button id="mp-start" hidden class="primary">Start match</button><button id="mp-leave" class="secondary">Leave lobby</button><button id="mp-cancel" hidden class="secondary">Cancel match</button></div>
+<div id="mp-players" class="mt-5 space-y-2"></div></div>
+<div id="mp-game" class="panel p-6 mt-6"></div>
+</section>
+</section>
 
       <!-- ── Create view ───────────────────────────────────── -->
       <section id="create-view">
