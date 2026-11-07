@@ -19,6 +19,8 @@ public class LobbyState {
     public DateTime? Deadline { get; set; }
     public DateTime? NextRoundAt { get; set; }
     public int Round { get; set; }
+    public int Game { get; set; } = 1;
+    public DateTime? WaitingSince { get; set; }
     public List<LobbyQuestion> Questions { get; set; } = [];
     public List<LobbyPlayer> Players { get; set; } = [];
     public List<RoundResult> Rounds { get; set; } = [];
@@ -34,7 +36,8 @@ public record LobbyAnswer(int Index, int Choice, bool Correct);
 public record RoundResult(int Index, string? Winner, string Reason);
 public record CreateLobby(string Category, string Level, string Mode, int Count, int Minutes);
 public record ReadyLobby(bool Ready);
-public record LobbyAction(int Index, int Choice);
+public record LobbyAction(int Index, int Choice, int Game = 1);
+public record ReplayLobby(int Game);
 public static class Multiplayer {
     public const string Postgres = """
         CREATE TABLE IF NOT EXISTS "Lobbies" ("Code" varchar(10) PRIMARY KEY, "Data" text NOT NULL);
@@ -69,13 +72,14 @@ public static class Multiplayer {
         api.MapPost("/lobbies/{code}/join", (string code, StudyDb db, HttpContext c) => Access(code, db, c, "join"));
         api.MapPost("/lobbies/{code}/ready", (string code, ReadyLobby r, StudyDb db, HttpContext c) => Access(code, db, c, r.Ready ? "ready" : "unready"));
         api.MapPost("/lobbies/{code}/start", (string code, StudyDb db, HttpContext c) => Access(code, db, c, "start"));
+        api.MapPost("/lobbies/{code}/replay", (string code, ReplayLobby r, StudyDb db, HttpContext c) => Access(code, db, c, "replay", replayGame: r.Game));
         api.MapPost("/lobbies/{code}/answer", (string code, LobbyAction r, StudyDb db, HttpContext c) => Access(code, db, c, "answer", r));
         api.MapPost("/lobbies/{code}/leave", (string code, StudyDb db, HttpContext c) => Access(code, db, c, "leave"));
         api.MapPost("/lobbies/{code}/cancel", (string code, StudyDb db, HttpContext c) => Access(code, db, c, "cancel"));
     }
     private static string User(HttpContext c) => c.User.FindFirstValue(ClaimTypes.NameIdentifier)!;
     // Row locks serialize answers across processes and deploys: one round has one winner.
-    private static async Task<IResult> Access(string code, StudyDb db, HttpContext c, string action, LobbyAction? answer = null) {
+    private static async Task<IResult> Access(string code, StudyDb db, HttpContext c, string action, LobbyAction? answer = null, int? replayGame = null) {
         code = code.ToUpperInvariant();
         if (code.Length != 10 || code.Any(x => !Uri.IsHexDigit(x))) return Results.NotFound(new { error = "Lobby not found. Check the code." });
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -86,7 +90,7 @@ public static class Multiplayer {
         var s = JsonSerializer.Deserialize<LobbyState>(lobby.Data)!;
         var me = s.Players.SingleOrDefault(p => p.Id == User(c));
         var now = DateTime.UtcNow;
-        if (s.Status == "waiting" && now > s.Created.AddHours(24)) s.Status = "cancelled";
+        if (s.Status == "waiting" && now > (s.WaitingSince ?? s.Created).AddHours(24)) s.Status = "cancelled";
         Tick(s, now);
         string? error = null;
         if (me == null) {
@@ -107,15 +111,29 @@ public static class Multiplayer {
                 break;
             case "cancel":
                 if (s.Host != me.Id) return Results.Forbid();
-                if (s.Status is "waiting" or "playing") s.Status = "cancelled";
+                s.Status = "cancelled";
+                s.Deadline = null; s.NextRoundAt = null;
+                break;
+            case "replay":
+                if (s.Host != me.Id) return Results.Forbid();
+                if (s.Status != "finished" || replayGame != s.Game) { error = "Only the current finished match can return to the lobby."; break; }
+                s.Game++;
+                s.Status = "waiting"; s.WaitingSince = now;
+                s.Deadline = null; s.NextRoundAt = null; s.Round = 0; s.Rounds.Clear();
+                foreach (var player in s.Players) { player.Answers.Clear(); player.Ready = player.Id == s.Host; }
+                // Replay the selected bank set with fresh question and option ordering.
+                s.Questions = s.Questions.Select(q => {
+                    var order = Enumerable.Range(0, 4).OrderBy(_ => RandomNumberGenerator.GetInt32(int.MaxValue)).ToArray();
+                    return new LobbyQuestion(q.Category, new Question(q.Question.Prompt, order.Select(i => q.Question.Options[i]).ToArray(), Array.IndexOf(order, q.Question.Answer), q.Question.Explanation, q.Question.Steps));
+                }).OrderBy(_ => RandomNumberGenerator.GetInt32(int.MaxValue)).ToList();
                 break;
             case "leave":
-                if (s.Status != "waiting") error = "A running match keeps your place. You may close the page and rejoin with this code.";
-                else if (s.Host == me.Id) s.Status = "cancelled";
+                if (s.Status == "playing") error = "A running match keeps your place. You may close the page and rejoin with this code.";
+                else if (s.Host == me.Id) s.Status = "cancelled"; // host leaving = cancel
                 else s.Players.Remove(me);
                 break;
             case "answer":
-                if (s.Status != "playing" || s.NextRoundAt != null || answer == null || answer.Index < 0 || answer.Index >= s.Questions.Count || answer.Choice is < 0 or > 3) { error = "This question is no longer accepting answers."; break; }
+                if (s.Status != "playing" || s.NextRoundAt != null || answer == null || answer.Game != s.Game || answer.Index < 0 || answer.Index >= s.Questions.Count || answer.Choice is < 0 or > 3) { error = "This question is no longer accepting answers."; break; }
                 var expected = s.Mode == "speed" ? s.Round : me.Answers.Count;
                 if (answer.Index != expected || me.Answers.Any(a => a.Index == answer.Index)) { error = "This answer was already submitted or belongs to another question."; break; }
                 var correct = s.Questions[answer.Index].Question.Answer == answer.Choice;
@@ -157,7 +175,7 @@ public static class Multiplayer {
         var winners = s.Status == "finished" && maximum > 0 ? scores.Where(p => p.score == maximum).Select(p => p.Id).ToArray() : [];
         var reviewIndex = s.Mode == "speed" && s.NextRoundAt != null ? s.Round : -1;
         return new {
-            code, s.Status, s.Mode, s.Category, s.Level, s.Minutes, count = s.Questions.Count, s.Host,
+            code, s.Game, s.Status, s.Mode, s.Category, s.Level, s.Minutes, count = s.Questions.Count, s.Host,
             me = me.Id, ready = me.Ready, serverTime = now, s.Deadline, s.NextRoundAt,
             players = scores.Select(p => new { p.Id, p.Name, p.Ready, p.answered, score = s.Mode == "speed" || s.Status == "finished" ? (int?)p.score : null }),
             winners, index, answered = me.Answers.Any(a => a.Index == index),
