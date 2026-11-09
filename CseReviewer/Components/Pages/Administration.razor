@@ -8,7 +8,11 @@
 
 <PageTitle>Administration · Husay</PageTitle>
 
-<MudText Typo="Typo.h4">Administration</MudText>
+<div class="page-head">
+    <MudText Typo="Typo.overline" Color="Color.Primary">Administration</MudText>
+    <MudText Typo="Typo.h3" Class="mt-1">Accounts and questions</MudText>
+    <MudText Color="Color.Secondary" Class="mt-3 measure">Manage who can sign in and what role they have, and add single questions to the shared bank. To import many questions at once, use the Question bank section on the Practice page.</MudText>
+</div>
 
 @if (_user == null) {
     <MudProgressLinear Indeterminate="true" Class="@AppTheme.SectionGap" />
@@ -16,9 +20,9 @@
     <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="@AppTheme.SectionGap">Administrator access is required.</MudAlert>
 } else {
     @if (_user.IsSuperAdmin) {
-        <MudPaper Class="@($"{AppTheme.CardPadding} {AppTheme.SectionGap}")">
-            <MudText Typo="Typo.h6">User roles</MudText>
-            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">Accounts appear after registration. Admins can add and import questions. Users can study and save their own progress.</MudText>
+        <section class="mb-10">
+            <MudText Typo="Typo.overline" Class="section-label">User accounts</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="measure">Accounts appear here after people register. Admins can add and import questions. Users can practice and save their own progress.</MudText>
             <MudTextField T="string" Placeholder="Search by username…" Variant="Variant.Outlined" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
                           @bind-Value="_search" Immediate="true" Clearable="true" Class="mt-4" aria-label="Search users by username" />
             @if (string.IsNullOrWhiteSpace(_search)) {
@@ -44,11 +48,11 @@
                     </NoRecordsContent>
                 </MudTable>
             }
-        </MudPaper>
+        </section>
     }
 
-    <MudPaper Class="@($"{AppTheme.CardPadding} {AppTheme.SectionGap}")">
-        <MudText Typo="Typo.h6">Add a question</MudText>
+    <section class="mb-10">
+        <MudText Typo="Typo.overline" Class="section-label">Add a question</MudText>
         <MudForm @key="_questionFormVersion" @ref="_questionForm" Class="mt-4">
             <MudGrid>
                 <MudItem xs="12" md="4">
@@ -105,7 +109,7 @@
             }
             Add to question bank
         </MudButton>
-    </MudPaper>
+    </section>
 }
 
 @code {

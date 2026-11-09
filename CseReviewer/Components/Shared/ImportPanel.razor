@@ -3,15 +3,20 @@
 @inject CurrentUserAccessor Users
 @inject ISnackbar Snackbar
 
-<MudPaper Class="pa-6 mb-6">
-    <MudText Typo="Typo.h6">Add questions from an HTML file</MudText>
-    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">Import to the shared question bank and create random sets without AI. Imported content is supplied by you, not verified by CSC.</MudText>
+<MudExpansionPanels Class="mb-8" Elevation="0" Outlined="true">
+<MudExpansionPanel>
+<TitleContent>
+    <MudText Typo="Typo.subtitle1">Question bank</MudText>
+    <MudText Typo="Typo.caption" Color="Color.Secondary">For administrators: import questions from an HTML file. @BankTotalText questions in the bank.</MudText>
+</TitleContent>
+<ChildContent>
+    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="measure">Imported questions are added to the shared bank and can be drawn into practice sets. The content is supplied by you and is not verified by the CSC.</MudText>
 
     <MudFileUpload T="IBrowserFile" Accept=".html,.htm" OnFilesChanged="PreviewFile" Hidden="false" Disabled="@_isProcessing" Class="mt-4"
                    Style="position:relative;display:block;"
                    InputStyle="@AppTheme.FileInputOverlayStyle">
         <ActivatorContent>
-            <MudPaper Outlined="true" Class="@($"{AppTheme.CardPadding} text-center")" Style="@AppTheme.DropZoneStyle">
+            <MudPaper Elevation="0" Outlined="true" Class="pa-6 text-center" Style="@AppTheme.DropZoneStyle">
                 <MudIcon Icon="@Icons.Material.Filled.UploadFile" Color="Color.Primary" />
                 <MudText>Drop an HTML reviewer here, or choose a file</MudText>
             </MudPaper>
@@ -55,9 +60,9 @@
         }
     </MudStack>
 
-    <MudPaper Outlined="true" Class="pa-4 mt-4">
+    <MudPaper Elevation="0" Outlined="true" Class="pa-4 mt-4">
         <MudText Typo="Typo.subtitle2">Questions saved in your imported database bank</MudText>
-        <MudText Typo="Typo.h3" Color="Color.Primary">@BankTotalText</MudText>
+        <MudText Typo="Typo.h3" Class="numeric">@BankTotalText</MudText>
         <MudText Typo="Typo.caption" Color="Color.Secondary">Questions available to all study accounts. Repeated questions and copies in saved practice sets are not counted again.</MudText>
     </MudPaper>
 
@@ -99,7 +104,9 @@
             </tfoot>
         </MudSimpleTable>
     }
-</MudPaper>
+</ChildContent>
+</MudExpansionPanel>
+</MudExpansionPanels>
 
 @code {
     #region Properties

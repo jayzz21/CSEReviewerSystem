@@ -49,10 +49,9 @@
     <MudStack Spacing="3" Class="mt-5">
         @for (var i = 0; i < View.Question.Options.Length; i++) {
             var choice = i;
-            <MudButton Variant="@(SelectedChoice == choice ? Variant.Filled : Variant.Outlined)" Color="@(SelectedChoice == choice ? Color.Primary : Color.Default)" FullWidth="true"
-                       Disabled="@View.Answered" Style="@AppTheme.ChoiceButtonStyle" OnClick="() => OnChoiceSelected.InvokeAsync(choice)">
-                <MudAvatar Size="Size.Small" Variant="Variant.Outlined" Class="mr-3">@("ABCD"[choice])</MudAvatar>
-                @View.Question.Options[choice]
+            <MudButton Variant="Variant.Text" DisableRipple="true" Class="@("option-row " + (SelectedChoice == choice ? "is-selected" : ""))" Disabled="@View.Answered" OnClick="() => OnChoiceSelected.InvokeAsync(choice)">
+                <span class="option-letter">@("ABCD"[choice])</span>
+                <span>@View.Question.Options[choice]</span>
             </MudButton>
         }
     </MudStack>

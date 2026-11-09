@@ -9,7 +9,8 @@
 <PageTitle>@(IsRegisterPage ? "Create account" : "Sign in") · Husay</PageTitle>
 
 @if (IsRegisterPage) {
-    <MudText Typo="Typo.h5">Create your study account</MudText>
+    <MudText Typo="Typo.h4">Create an account</MudText>
+    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">Choose a username and a password of at least 12 characters.</MudText>
     @if (_error.Length > 0) {
         <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="mt-4">@_error</MudAlert>
     }
@@ -31,9 +32,11 @@
             </MudButton>
         </MudStack>
     </form>
-    <MudLink Href="@("/Login" + ReturnUrlQuery)" Class="mt-6 d-block">Already registered? Sign in</MudLink>
+    <hr class="rule mt-8" />
+    <MudText Typo="Typo.body2" Class="mt-4">Already have an account? <MudLink Href="@("/Login" + ReturnUrlQuery)" Typo="Typo.body2">Sign in</MudLink></MudText>
 } else {
-    <MudText Typo="Typo.h5">Welcome back</MudText>
+    <MudText Typo="Typo.h4">Sign in</MudText>
+    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">Use the username and password for your account.</MudText>
     @if (Registered == "1" && _error.Length == 0) {
         <MudAlert Severity="Severity.Success" Variant="Variant.Outlined" Class="mt-4">Account created. Sign in with your username and password.</MudAlert>
     }
@@ -56,7 +59,8 @@
             </MudButton>
         </MudStack>
     </form>
-    <MudLink Href="/Register" Class="mt-6 d-block">New here? Create an account</MudLink>
+    <hr class="rule mt-8" />
+    <MudText Typo="Typo.body2" Class="mt-4">No account yet? <MudLink Href="/Register" Typo="Typo.body2">Create one</MudLink></MudText>
 }
 
 @code {

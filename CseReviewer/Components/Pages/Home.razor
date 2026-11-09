@@ -6,112 +6,87 @@
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 
-<PageTitle>Husay · CSE Reviewer</PageTitle>
+<PageTitle>Practice · Husay</PageTitle>
 
-<MudText Typo="Typo.overline" Color="Color.Primary">Practice with purpose</MudText>
-<MudText Typo="Typo.h4" Class="mt-1">Your next chapter starts here.</MudText>
-<MudText Color="Color.Secondary" Class="mt-3 mb-6">Build a reviewer around what you need to learn. Answer at your own pace, understand every solution, and keep your favorite sets.</MudText>
+<div class="page-head">
+    <MudText Typo="Typo.overline" Color="Color.Primary">Practice</MudText>
+    <MudText Typo="Typo.h3" Class="mt-1">Build a practice set</MudText>
+    <MudText Color="Color.Secondary" Class="mt-3 measure">Choose a level, a subject and how many questions you want. After each question you see the correct answer and a worked explanation.</MudText>
+</div>
 
 @if (_user?.IsAdmin == true) {
     <ImportPanel OnBankUpdated="CheckBankAvailability" />
 }
 
-<MudGrid Class="mt-2">
-    <MudItem xs="12" lg="8">
-        <MudPaper Class="@AppTheme.LargeCardPadding">
-            <form @onsubmit="CreatePracticeSet">
-                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3" Class="mb-6">
-                    <MudAvatar Color="Color.Primary" Variant="Variant.Outlined"><MudIcon Icon="@Icons.Material.Filled.AutoAwesome" /></MudAvatar>
-                    <div>
-                        <MudText Typo="Typo.h6">Make it your reviewer</MudText>
-                        <MudText Typo="Typo.body2" Color="Color.Secondary">One focused set. A clearer understanding.</MudText>
-                    </div>
-                </MudStack>
+<MudGrid Spacing="8">
+    <MudItem xs="12" md="8">
+        <form @onsubmit="CreatePracticeSet">
+            <MudText Typo="Typo.overline" Class="section-label">1. Level and source</MudText>
+            <MudGrid>
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="string" Label="Exam level" Variant="Variant.Outlined" Value="@_level" ValueChanged="@ChangeLevel">
+                        <MudSelectItem T="string" Value="@("Professional")" />
+                        <MudSelectItem T="string" Value="@("Subprofessional")" />
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="string" Label="Question source" Variant="Variant.Outlined" Value="@_mode" ValueChanged="@ChangeMode" ToStringFunc="@ModeLabel">
+                        <MudSelectItem T="string" Value="@("bank")" />
+                        <MudSelectItem T="string" Value="@("ai")" />
+                    </MudSelect>
+                </MudItem>
+            </MudGrid>
 
-                <MudGrid>
-                    <MudItem xs="12" sm="6">
-                        <MudSelect T="string" Label="Exam level" Variant="Variant.Outlined" Value="@_level" ValueChanged="@ChangeLevel">
-                            <MudSelectItem T="string" Value="@("Professional")" />
-                            <MudSelectItem T="string" Value="@("Subprofessional")" />
-                        </MudSelect>
-                    </MudItem>
-                    <MudItem xs="12" sm="6">
-                        <MudSelect T="string" Label="Generation mode" Variant="Variant.Outlined" Value="@_mode" ValueChanged="@ChangeMode" ToStringFunc="@ModeLabel">
-                            <MudSelectItem T="string" Value="@("bank")" />
-                            <MudSelectItem T="string" Value="@("ai")" />
-                        </MudSelect>
-                    </MudItem>
-                </MudGrid>
+            <MudText Typo="Typo.overline" Class="section-label mt-8">2. Subject</MudText>
+            <MudStack Spacing="2">
+                @foreach (var category in AllowedCategories) {
+                    var chosen = category;
+                    <MudButton Variant="Variant.Text" DisableRipple="true" Class="@("pick-row " + (chosen == _category ? "is-selected" : ""))" aria-pressed="@(chosen == _category ? "true" : "false")" OnClick="() => SelectCategory(chosen)">
+                        <MudText Typo="Typo.subtitle2">@chosen</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@_categoryHints[Array.IndexOf(_categories, chosen)]</MudText>
+                    </MudButton>
+                }
+            </MudStack>
 
-                <MudText Typo="Typo.overline" Class="mt-6">What would you like to practice?</MudText>
-                <MudDivider Class="mb-3" />
-                <MudGrid>
-                    @foreach (var category in AllowedCategories) {
-                        var chosen = category;
-                        <MudItem xs="12" sm="6">
-                            <MudButton Variant="Variant.Outlined" Color="@(chosen == _category ? Color.Primary : Color.Default)" FullWidth="true"
-                                       Style="@AppTheme.CategoryButtonStyle"
-                                       aria-pressed="@(chosen == _category ? "true" : "false")" OnClick="() => SelectCategory(chosen)">
-                                <div>
-                                    <MudText Typo="Typo.subtitle2">@chosen</MudText>
-                                    <MudText Typo="Typo.caption" Color="Color.Secondary">@_categoryHints[Array.IndexOf(_categories, chosen)]</MudText>
-                                </div>
-                            </MudButton>
-                        </MudItem>
-                    }
-                </MudGrid>
-
-                <MudTextField T="string" Label="Your focus (optional, AI mode)" Variant="Variant.Outlined" Lines="3" Disabled="true" Class="mt-6"
-                              Placeholder="e.g. Percentages and ratios in everyday situations. Show me how to solve each problem." />
-
-                <MudGrid Class="mt-2">
-                    <MudItem xs="12" sm="6">
-                        <MudSelect T="string" Label="Difficulty" Variant="Variant.Outlined" Value="@_difficulty" ValueChanged="@ChangeDifficulty">
-                            <MudSelectItem T="string" Value="@("Easy")" />
-                            <MudSelectItem T="string" Value="@("Moderate")" />
-                            <MudSelectItem T="string" Value="@("Hard")" />
-                            <MudSelectItem T="string" Value="@("Mixed")" />
-                        </MudSelect>
-                    </MudItem>
-                    <MudItem xs="12" sm="6">
-                        @if (IsBankMode) {
-                            <MudNumericField T="int" Label="Questions" Variant="Variant.Outlined" Min="1" Max="@Math.Max(1, _bankAvailable)" Class="text-align-right"
-                                             @bind-Value="_bankCount" Immediate="true" HelperText="@_bankStatus" />
-                        } else {
-                            <MudNumericField T="int" Label="Questions" Variant="Variant.Outlined" Value="20" Disabled="true" Class="text-align-right" />
-                        }
-                    </MudItem>
-                </MudGrid>
-
-                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-4">@ModeNote</MudText>
-                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Class="mt-4" Size="Size.Large"
-                           Disabled="@(!CanCreate)" StartIcon="@(_isProcessing ? null : Icons.Material.Filled.ArrowForward)">
-                    @if (_isProcessing) {
-                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
-                        @_buttonText
+            <MudText Typo="Typo.overline" Class="section-label mt-8">3. Difficulty and length</MudText>
+            <MudGrid>
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="string" Label="Difficulty" Variant="Variant.Outlined" Value="@_difficulty" ValueChanged="@ChangeDifficulty">
+                        <MudSelectItem T="string" Value="@("Easy")" />
+                        <MudSelectItem T="string" Value="@("Moderate")" />
+                        <MudSelectItem T="string" Value="@("Hard")" />
+                        <MudSelectItem T="string" Value="@("Mixed")" />
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    @if (IsBankMode) {
+                        <MudNumericField T="int" Label="Number of questions" Variant="Variant.Outlined" Min="1" Max="@Math.Max(1, _bankAvailable)" Class="text-align-right" HideSpinButtons="true"
+                                         @bind-Value="_bankCount" Immediate="true" HelperText="@_bankStatus" />
                     } else {
-                        @("Create practice set")
+                        <MudNumericField T="int" Label="Number of questions" Variant="Variant.Outlined" Value="20" Disabled="true" Class="text-align-right" HideSpinButtons="true" />
                     }
-                </MudButton>
-            </form>
-        </MudPaper>
+                </MudItem>
+            </MudGrid>
+
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-4 measure">@ModeNote</MudText>
+            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="mt-6" Size="Size.Large"
+                       Disabled="@(!CanCreate)" StartIcon="@(_isProcessing ? null : Icons.Material.Outlined.PlayArrow)">
+                @if (_isProcessing) {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                    @_buttonText
+                } else {
+                    @("Start practice")
+                }
+            </MudButton>
+        </form>
     </MudItem>
-    <MudItem xs="12" lg="4">
-        <MudStack Spacing="3">
-            <MudPaper Class="@AppTheme.CardPadding">
-                <MudText Typo="Typo.overline" Color="Color.Primary">Learn, don't just guess</MudText>
-                <MudText Typo="Typo.h6" Class="mb-3">Every answer is a lesson.</MudText>
-                <MudText Typo="Typo.subtitle2" Color="Color.Primary">01 Make it personal</MudText>
-                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">Pick a subject and tell the AI where you need practice.</MudText>
-                <MudText Typo="Typo.subtitle2" Color="Color.Primary">02 Understand the why</MudText>
-                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">Get instant feedback and worked numerical solutions.</MudText>
-                <MudText Typo="Typo.subtitle2" Color="Color.Primary">03 Keep growing</MudText>
-                <MudText Typo="Typo.body2" Color="Color.Secondary">Save a set and revisit it whenever you're ready.</MudText>
-            </MudPaper>
-            <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.Info">
-                <strong>A reviewer, not an official exam.</strong> Original practice inspired by CSC subject coverage. AI can make mistakes; verify any doubtful explanation.
-            </MudAlert>
-        </MudStack>
+    <MudItem xs="12" md="4">
+        <MudText Typo="Typo.overline" Class="section-label">Before you start</MudText>
+        <MudText Typo="Typo.body2">Questions come from the shared bank your administrators have imported. If a combination has too few, you are told before the set is created.</MudText>
+        <hr class="rule my-4" />
+        <MudText Typo="Typo.body2">Leave a set unfinished and you can save it, then continue from Saved sets.</MudText>
+        <hr class="rule my-4" />
+        <MudText Typo="Typo.body2">AI-written questions are not available yet, so the question source is the shared bank.</MudText>
     </MudItem>
 </MudGrid>
 

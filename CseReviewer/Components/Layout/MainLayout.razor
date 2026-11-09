@@ -8,49 +8,43 @@
 <AppProviders @bind-IsDarkMode="_isDarkMode" />
 
 <MudLayout>
-    <MudAppBar Elevation="1">
-        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="ToggleDrawer" aria-label="Open or close the menu" />
-        <MudText Typo="Typo.h6" Class="ml-2">husay.</MudText>
-        <MudSpacer />
-        <MudHidden Breakpoint="Breakpoint.SmAndDown">
-            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Inherit">PH Civil Service Exam</MudChip>
-        </MudHidden>
-        <MudTooltip Text="@(_isDarkMode ? "Switch to light mode" : "Switch to dark mode")">
-            <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)" Color="Color.Inherit" OnClick="ToggleDarkMode" aria-label="Toggle dark mode" />
-        </MudTooltip>
-    </MudAppBar>
-    <MudDrawer @bind-Open="_isDrawerOpen" Elevation="1" Variant="DrawerVariant.Responsive" ClipMode="DrawerClipMode.Always">
-        <MudText Typo="Typo.overline" Class="px-4 pt-4">Your study space</MudText>
-        <MudNavMenu>
-            <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.AutoAwesome">Create a reviewer</MudNavLink>
-            <MudNavLink Href="/My-Saved-Sets" Icon="@Icons.Material.Filled.Bookmarks">
-                My saved sets
-                @if (_savedCount > 0) {
-                    <MudChip T="string" Size="Size.Small" Class="ml-2">@_savedCount</MudChip>
-                }
-            </MudNavLink>
-            <MudNavLink Href="/Multiplayer" Icon="@Icons.Material.Filled.Groups">Multiplayer lobbies</MudNavLink>
+    <MudAppBar Elevation="0" Class="masthead" Fixed="true">
+        <MudIconButton Icon="@Icons.Material.Outlined.Menu" Class="masthead-menu" Edge="Edge.Start" OnClick="ToggleMenu" aria-label="Open the menu" />
+        <a href="/" class="wordmark">Husay</a>
+        <nav class="masthead-nav" aria-label="Main">
+            <a href="/" class="masthead-link @ActiveClass(IsPracticePage)">Practice</a>
+            <a href="/My-Saved-Sets" class="masthead-link @ActiveClass(IsPage("/My-Saved-Sets"))">Saved sets@(_savedCount > 0 ? $" ({_savedCount})" : "")</a>
+            <a href="/Multiplayer" class="masthead-link @ActiveClass(IsPage("/Multiplayer"))">Multiplayer</a>
             @if (_user?.IsAdmin == true) {
-                <MudNavLink Href="/Administration" Icon="@Icons.Material.Filled.AdminPanelSettings">Administration</MudNavLink>
+                <a href="/Administration" class="masthead-link @ActiveClass(IsPage("/Administration"))">Administration</a>
             }
-            <MudNavLink OnClick="SignOut" Icon="@Icons.Material.Filled.Logout">Sign out</MudNavLink>
+        </nav>
+        <MudSpacer />
+        <span class="who">@(string.IsNullOrEmpty(_user?.Name) ? "-" : _user.Name)</span>
+        <MudTooltip Text="@(_isDarkMode ? "Switch to light mode" : "Switch to dark mode")">
+            <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Outlined.LightMode : Icons.Material.Outlined.DarkMode)" OnClick="ToggleDarkMode" aria-label="Toggle dark mode" />
+        </MudTooltip>
+        <MudButton Variant="Variant.Text" Color="Color.Inherit" StartIcon="@Icons.Material.Outlined.Logout" OnClick="SignOut" Class="ml-1">Sign out</MudButton>
+    </MudAppBar>
+    <MudDrawer @bind-Open="_isMenuOpen" Variant="DrawerVariant.Temporary" Elevation="0" Anchor="Anchor.Start">
+        <MudText Typo="Typo.overline" Class="px-4 pt-5 pb-2">Menu</MudText>
+        <MudNavMenu>
+            <MudNavLink Href="/" Match="NavLinkMatch.All">Practice</MudNavLink>
+            <MudNavLink Href="/My-Saved-Sets">Saved sets@(_savedCount > 0 ? $" ({_savedCount})" : "")</MudNavLink>
+            <MudNavLink Href="/Multiplayer">Multiplayer</MudNavLink>
+            @if (_user?.IsAdmin == true) {
+                <MudNavLink Href="/Administration">Administration</MudNavLink>
+            }
         </MudNavMenu>
-        <div style="margin-top:auto" class="pa-4">
-            <MudPaper Outlined="true" Class="pa-4">
-                <MudText Typo="Typo.subtitle2">Small steps. Big progress.</MudText>
-                <MudText Typo="Typo.body2" Class="mt-1">A little practice today brings you closer to public service.</MudText>
-                <MudText Typo="Typo.overline" Color="Color.Primary" Class="mt-2">Para sa pangarap. Para sa bayan.</MudText>
-            </MudPaper>
-            <MudText Typo="Typo.caption" Class="mt-3">Signed in as @(string.IsNullOrEmpty(_user?.Name) ? "-" : _user.Name)</MudText>
-        </div>
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="px-4 mt-4">Signed in as @(string.IsNullOrEmpty(_user?.Name) ? "-" : _user.Name)</MudText>
     </MudDrawer>
     <MudMainContent>
         <MudContainer MaxWidth="AppTheme.PageMaxWidth" Class="@AppTheme.PageSpacing">
             @Body
-            <MudDivider Class="mt-10 mb-3" />
-            <div class="d-flex flex-wrap justify-space-between gap-3">
-                <MudText Typo="Typo.caption">Husay · A little better, every day.</MudText>
-                <MudLink Href="https://www.csc.gov.ph/more-than-400k-to-take-26-march-career-service-exam" Target="_blank" Typo="Typo.caption">CSC coverage reference</MudLink>
+            <hr class="rule mt-12" />
+            <div class="d-flex flex-wrap justify-space-between gap-3 mt-4">
+                <MudText Typo="Typo.caption" Color="Color.Secondary">Husay is a practice reviewer. It is not an official Civil Service Commission exam.</MudText>
+                <MudLink Href="https://www.csc.gov.ph/more-than-400k-to-take-26-march-career-service-exam" Target="_blank" Typo="Typo.caption" Color="Color.Secondary">CSC coverage reference</MudLink>
             </div>
         </MudContainer>
     </MudMainContent>
@@ -60,13 +54,16 @@
     #region Properties
     private CurrentUser? _user;
     private int _savedCount;
+    private string _currentPath = "/";
     private bool _isDarkMode;
-    private bool _isDrawerOpen = true;
+    private bool _isMenuOpen;
+    private bool IsPracticePage => IsPage("/") || IsPage("/Practice");
     #endregion
 
     #region Lifecycle
     protected override async Task OnInitializedAsync() {
         _user = await Users.Get();
+        _currentPath = CurrentPath();
         Navigation.LocationChanged += OnLocationChanged;
         await LoadSavedCount();
     }
@@ -79,6 +76,8 @@
     #region Methods
     private void OnLocationChanged(object? sender, LocationChangedEventArgs e) {
         _ = InvokeAsync(async () => {
+            _currentPath = CurrentPath();
+            _isMenuOpen = false;
             await LoadSavedCount();
             StateHasChanged();
         });
@@ -89,8 +88,18 @@
         _savedCount = (await Practice.GetSavedSets(_user.Id)).Count;
     }
 
-    private void ToggleDrawer() {
-        _isDrawerOpen = !_isDrawerOpen;
+    private string CurrentPath() {
+        return "/" + Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].TrimEnd('/');
+    }
+
+    private bool IsPage(string path) {
+        return path == "/" ? _currentPath == "/" : _currentPath.StartsWith(path, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string ActiveClass(bool isActive) => isActive ? "is-active" : "";
+
+    private void ToggleMenu() {
+        _isMenuOpen = !_isMenuOpen;
     }
 
     private async Task ToggleDarkMode() {

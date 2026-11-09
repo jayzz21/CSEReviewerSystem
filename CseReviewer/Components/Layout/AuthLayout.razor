@@ -4,23 +4,23 @@
 <AppProviders @bind-IsDarkMode="_isDarkMode" />
 
 <MudLayout>
+    <MudAppBar Elevation="0" Class="masthead" Fixed="true">
+        <a href="/" class="wordmark">Husay</a>
+        <MudSpacer />
+        <MudTooltip Text="@(_isDarkMode ? "Switch to light mode" : "Switch to dark mode")">
+            <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Outlined.LightMode : Icons.Material.Outlined.DarkMode)" OnClick="ToggleDarkMode" aria-label="Toggle dark mode" />
+        </MudTooltip>
+    </MudAppBar>
     <MudMainContent>
-        <MudContainer MaxWidth="AppTheme.PageMaxWidth" Class="py-8">
-            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
-                <MudLink Href="/" Underline="Underline.None"><MudText Typo="Typo.h5" Color="Color.Primary"><strong>h. husay</strong></MudText></MudLink>
-                <MudTooltip Text="@(_isDarkMode ? "Switch to light mode" : "Switch to dark mode")">
-                    <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)" OnClick="ToggleDarkMode" aria-label="Toggle dark mode" />
-                </MudTooltip>
-            </MudStack>
-            <MudGrid Class="mt-8">
+        <MudContainer MaxWidth="AppTheme.PageMaxWidth" Class="auth-stage">
+            <MudGrid Spacing="8" Class="py-8">
                 <MudItem xs="12" md="6">
-                    <MudText Typo="Typo.overline" Color="Color.Primary">Your next chapter</MudText>
-                    <MudText Typo="Typo.h4" Class="mt-2">A little practice.<br />A brighter future.</MudText>
-                    <MudText Color="Color.Secondary" Class="mt-4">Sign in to keep your reviewer sets and study progress together, wherever you practice.</MudText>
-                    <MudText Class="mt-4">Your answers and progress belong to your account.</MudText>
+                    <MudText Typo="Typo.overline" Color="Color.Primary">Civil Service Examination review</MudText>
+                    <MudText Typo="Typo.h2" Class="mt-3">Practice by subject.<br />Learn from every answer.</MudText>
+                    <MudText Class="mt-5 measure" Color="Color.Secondary">Work through questions by subject and level, read the worked explanation after each one, and save a set to finish later. Your progress stays with your account.</MudText>
                 </MudItem>
                 <MudItem xs="12" md="6">
-                    <MudPaper Class="@AppTheme.LargeCardPadding">
+                    <MudPaper Elevation="0" Class="@AppTheme.LargePanel">
                         @Body
                     </MudPaper>
                 </MudItem>

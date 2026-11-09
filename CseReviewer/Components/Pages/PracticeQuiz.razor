@@ -13,94 +13,95 @@
 @if (_isLoading) {
     <MudProgressLinear Indeterminate="true" />
 } else if (_set == null) {
-    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">Practice set not found.</MudAlert>
-    <MudButton Href="/" Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ArrowBack" Class="mt-4">Back to create</MudButton>
+    <MudText Typo="Typo.h5">Practice set not found</MudText>
+    <MudText Color="Color.Secondary" Class="mt-2">It may have been removed, or it belongs to a different account.</MudText>
+    <MudButton Href="/" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.ArrowBack" Class="mt-4">Back to practice</MudButton>
 } else {
-    <MudButton Href="/" Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ArrowBack" Class="mb-4">Back to create</MudButton>
-    <MudText Typo="Typo.overline" Color="Color.Primary">@_set.Level · @_set.Source · @_set.Difficulty</MudText>
-    <MudText Typo="Typo.h4" Class="mt-1">@_set.Title</MudText>
+    <div class="page-head">
+        <div><MudButton Href="/" Variant="Variant.Text" Color="Color.Secondary" StartIcon="@Icons.Material.Outlined.ArrowBack" Class="mb-2 ml-n2">Back to practice</MudButton></div>
+        <MudText Typo="Typo.overline" Color="Color.Primary">@_set.Level · @_set.Source · @_set.Difficulty</MudText>
+        <MudText Typo="Typo.h4" Class="mt-1">@_set.Title</MudText>
+    </div>
 
-    <MudStack Row="true" Justify="Justify.SpaceBetween" Class="mt-6">
-        <MudText Typo="Typo.body2" Color="Color.Secondary">@(_showSummary ? "Practice complete" : $"Question {_index + 1} of {_set.Questions.Count}")</MudText>
-        <MudText Typo="Typo.body2" Color="Color.Secondary">@CorrectCount correct · @_results.Count answered</MudText>
-    </MudStack>
-    <MudProgressLinear Value="@ProgressPercent" Color="Color.Primary" Size="Size.Medium" Rounded="true" Class="mt-2" />
+    <div style="max-width:780px">
+        <MudStack Row="true" Justify="Justify.SpaceBetween">
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="numeric">@(_showSummary ? "Finished" : $"Question {_index + 1} of {_set.Questions.Count}")</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="numeric">@CorrectCount correct · @_results.Count answered</MudText>
+        </MudStack>
+        <div class="progress-line mt-2" role="progressbar" aria-valuenow="@((int)ProgressPercent)" aria-valuemin="0" aria-valuemax="100"><div style="width:@(((int)ProgressPercent).ToString())%"></div></div>
 
-    <MudPaper Class="@($"{AppTheme.LargeCardPadding} {AppTheme.SectionGap}")">
         @if (_showSummary) {
-            <MudText Typo="Typo.overline" Color="Color.Primary">One step closer</MudText>
-            <MudText Typo="Typo.h4" Class="mt-2">You showed up. That matters.</MudText>
-            <MudText Typo="Typo.h2" Color="Color.Primary" Class="mt-6">@CorrectCount<MudText Typo="Typo.h5" Color="Color.Secondary" Inline="true"> / @_results.Count</MudText></MudText>
-            <MudText Color="Color.Secondary" Class="mt-2">@ScorePercent% on this practice set. Review your answers below, then start a newly selected set.</MudText>
-            <MudExpansionPanels Class="mt-6" Elevation="0" Outlined="true">
+            <MudText Typo="Typo.overline" Color="Color.Primary" Class="mt-10 d-block">Result</MudText>
+            <div class="score numeric mt-2">@CorrectCount<span style="font-size:0.45em;font-weight:400" class="ml-2">of @_results.Count correct</span></div>
+            <MudText Color="Color.Secondary" Class="mt-3 measure">@ScorePercent% on this set. Open any question below to review the answer and the explanation.</MudText>
+            <MudExpansionPanels Class="mt-8" Elevation="0" Outlined="true">
                 @for (var i = 0; i < _set.Questions.Count; i++) {
                     var question = _set.Questions[i];
                     var result = _results[i];
                     <MudExpansionPanel>
                         <TitleContent>
-                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                                <MudIcon Icon="@(result.Correct ? Icons.Material.Filled.CheckCircle : Icons.Material.Outlined.Circle)" Color="@(result.Correct ? Color.Success : Color.Default)" />
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
+                                <MudText Typo="Typo.subtitle2" Color="@(result.Correct ? Color.Success : Color.Error)" Style="min-width:64px">@(result.Correct ? "Correct" : "Missed")</MudText>
                                 <MudText>@question.Prompt</MudText>
                             </MudStack>
                         </TitleContent>
                         <ChildContent>
-                            <MudText>Correct answer: @question.Options[result.Answer]</MudText>
+                            <MudText><strong>Answer:</strong> @question.Options[result.Answer]</MudText>
                             <MudText Color="Color.Secondary" Class="mt-2">@result.Explanation</MudText>
                             @foreach (var step in result.Steps) {
-                                <MudText Typo="Typo.body2" Class="mt-2">@step</MudText>
+                                <MudText Typo="Typo.body2" Class="mt-1">@step</MudText>
                             }
                         </ChildContent>
                     </MudExpansionPanel>
                 }
             </MudExpansionPanels>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-6" Disabled="@_isProcessing" OnClick="StartNextSet" EndIcon="@(_isProcessing ? null : Icons.Material.Filled.ArrowForward)">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-8" Disabled="@_isProcessing" OnClick="StartNextSet" EndIcon="@(_isProcessing ? null : Icons.Material.Outlined.ArrowForward)">
                 @if (_isProcessing) {
                     <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
                 }
-                Start next set
+                Start another set like this
             </MudButton>
         } else {
             var current = _set.Questions[_index];
-            <MudText Typo="Typo.overline" Color="Color.Primary">@_set.Category</MudText>
-            <MudText Typo="Typo.h6" Class="mt-2">@current.Prompt</MudText>
-            <MudStack Spacing="3" Class="mt-5">
+            <MudText Typo="Typo.overline" Color="Color.Primary" Class="mt-8 d-block">@_set.Category</MudText>
+            <MudText Typo="Typo.h5" Class="mt-2">@current.Prompt</MudText>
+            <MudStack Spacing="2" Class="mt-6">
                 @for (var i = 0; i < current.Options.Length; i++) {
                     var choice = i;
-                    <MudButton Variant="@OptionVariant(choice)" Color="@OptionColor(choice)" FullWidth="true" aria-pressed="@(_selectedChoice == choice ? "true" : "false")"
-                               Style="@AppTheme.ChoiceButtonStyle" OnClick="() => SelectChoice(choice)">
-                        <MudAvatar Size="Size.Small" Variant="Variant.Outlined" Class="mr-3">@("ABCD"[choice])</MudAvatar>
-                        @current.Options[choice]
+                    <MudButton Variant="Variant.Text" DisableRipple="true" Class="@("option-row " + OptionClass(choice))" aria-pressed="@(_selectedChoice == choice ? "true" : "false")" OnClick="() => SelectChoice(choice)">
+                        <span class="option-letter">@("ABCD"[choice])</span>
+                        <span>@current.Options[choice]</span>
                     </MudButton>
                 }
             </MudStack>
             @if (_feedback == null) {
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-6" Disabled="@(_selectedChoice == null || _isProcessing)" OnClick="CheckAnswer"
-                           EndIcon="@(_isProcessing ? null : Icons.Material.Filled.ArrowForward)">
+                           StartIcon="@(_isProcessing ? null : Icons.Material.Outlined.Check)">
                     @if (_isProcessing) {
                         <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
                     }
                     Check answer
                 </MudButton>
             } else {
-                <MudAlert Severity="@(_feedback.Correct ? Severity.Success : Severity.Info)" Variant="Variant.Outlined" Class="mt-6" NoIcon="false">
-                    <MudText Typo="Typo.subtitle1">@(_feedback.Correct ? "Correct. Nicely done!" : "Keep going, this is how you learn.")</MudText>
-                    <MudText Typo="Typo.subtitle2" Class="mt-2">Correct answer: @("ABCD"[_feedback.Answer]). @current.Options[_feedback.Answer]</MudText>
-                    <MudText Typo="Typo.body2" Class="mt-2">@_feedback.Explanation</MudText>
+                <div class="@("explain mt-6 " + (_feedback.Correct ? "is-correct" : "is-wrong"))" aria-live="polite">
+                    <MudText Typo="Typo.subtitle1" Color="@(_feedback.Correct ? Color.Success : Color.Error)">@(_feedback.Correct ? "Correct" : "Not quite")</MudText>
+                    <MudText Class="mt-1"><strong>Answer:</strong> @("ABCD"[_feedback.Answer]). @current.Options[_feedback.Answer]</MudText>
+                    <MudText Color="Color.Secondary" Class="mt-2 measure">@_feedback.Explanation</MudText>
                     @if (_feedback.Steps.Length > 0) {
-                        <MudText Typo="Typo.subtitle2" Class="mt-3">Step-by-step solution</MudText>
+                        <MudText Typo="Typo.subtitle2" Class="mt-3">Worked solution</MudText>
                         <ol style="padding-left:20px;margin:4px 0 0 0;">
                             @foreach (var step in _feedback.Steps) {
                                 <li><MudText Typo="Typo.body2" Inline="true">@step</MudText></li>
                             }
                         </ol>
                     }
-                </MudAlert>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" OnClick="NextQuestion" EndIcon="@Icons.Material.Filled.ArrowForward">
+                </div>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-5" OnClick="NextQuestion" EndIcon="@Icons.Material.Outlined.ArrowForward">
                     @(_index + 1 == _set.Questions.Count ? "See my results" : "Next question")
                 </MudButton>
             }
         }
-    </MudPaper>
+    </div>
 }
 
 @code {
@@ -157,17 +158,10 @@
         }
     }
 
-    private Variant OptionVariant(int choice) {
-        if (_feedback != null) return choice == _feedback.Answer || choice == _feedback.Choice ? Variant.Filled : Variant.Outlined;
-        return _selectedChoice == choice ? Variant.Filled : Variant.Outlined;
-    }
-
-    private Color OptionColor(int choice) {
-        if (_feedback != null) {
-            if (choice == _feedback.Answer) return Color.Success;
-            return choice == _feedback.Choice ? Color.Error : Color.Default;
-        }
-        return _selectedChoice == choice ? Color.Primary : Color.Default;
+    private string OptionClass(int choice) {
+        if (_feedback == null) return _selectedChoice == choice ? "is-selected" : "";
+        if (choice == _feedback.Answer) return "is-correct is-locked";
+        return choice == _feedback.Choice ? "is-wrong is-locked" : "is-locked";
     }
 
     private void SelectChoice(int choice) {

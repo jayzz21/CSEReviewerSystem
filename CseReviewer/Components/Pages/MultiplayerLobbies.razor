@@ -11,16 +11,19 @@
 
 <PageTitle>Multiplayer · Husay</PageTitle>
 
-<MudText Typo="Typo.overline" Color="Color.Primary">Practice together</MudText>
-<MudText Typo="Typo.h4" Class="mt-1">Multiplayer challenge</MudText>
+<div class="page-head">
+    <MudText Typo="Typo.overline" Color="Color.Primary">Multiplayer</MudText>
+    <MudText Typo="Typo.h3" Class="mt-1">Answer the same questions together</MudText>
+    <MudText Color="Color.Secondary" Class="mt-3 measure">Create a lobby and share its code, or join one with a code you were given. Everyone gets the same questions, and the server keeps the time.</MudText>
+</div>
 
 @if (_isLoading) {
-    <MudProgressLinear Indeterminate="true" Class="@AppTheme.SectionGap" />
+    <MudProgressLinear Indeterminate="true" />
 } else if (_view == null) {
-    <MudGrid Class="mt-2">
+    <MudGrid Spacing="8">
         <MudItem xs="12" md="6">
-            <MudPaper Class="@AppTheme.CardPadding">
-                <MudText Typo="Typo.h6">Create a lobby</MudText>
+            <div>
+                <MudText Typo="Typo.overline" Class="section-label">Create a lobby</MudText>
                 <form @onsubmit="CreateNewLobby">
                     <MudStack Spacing="3" Class="mt-4">
                         <MudSelect T="string" Label="Exam level" Variant="Variant.Outlined" Value="@_level" ValueChanged="@ChangeLevel">
@@ -36,11 +39,11 @@
                             <MudSelectItem T="string" Value="@("test")" />
                             <MudSelectItem T="string" Value="@("speed")" />
                         </MudSelect>
-                        <MudNumericField T="int" Label="Number of questions" Variant="Variant.Outlined" Min="30" Max="180" Class="text-align-right" @bind-Value="_count" Immediate="true" />
-                        <MudNumericField T="int" Label="@(_mode == "speed" ? "Minutes per question" : "Minutes for the entire test")" Variant="Variant.Outlined" Min="1" Class="text-align-right"
+                        <MudNumericField T="int" Label="Number of questions" Variant="Variant.Outlined" Min="30" Max="180" Class="text-align-right" HideSpinButtons="true" @bind-Value="_count" Immediate="true" />
+                        <MudNumericField T="int" Label="@(_mode == "speed" ? "Minutes per question" : "Minutes for the entire test")" Variant="Variant.Outlined" Min="1" Class="text-align-right" HideSpinButtons="true"
                                          HelperText="Enter any positive whole number of minutes, such as 10, 30, or 120." @bind-Value="_minutes" Immediate="true" />
                         <MudText Typo="Typo.caption" Color="Color.Secondary">@RulesText</MudText>
-                        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="@_isProcessing" StartIcon="@(_isProcessing ? null : Icons.Material.Filled.Add)">
+                        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="align-self-start" Disabled="@_isProcessing" StartIcon="@(_isProcessing ? null : Icons.Material.Outlined.Add)">
                             @if (_isProcessing) {
                                 <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
                             }
@@ -48,15 +51,15 @@
                         </MudButton>
                     </MudStack>
                 </form>
-            </MudPaper>
+            </div>
         </MudItem>
         <MudItem xs="12" md="6">
-            <MudPaper Class="@AppTheme.CardPadding">
-                <MudText Typo="Typo.h6">Join your friends</MudText>
+            <div>
+                <MudText Typo="Typo.overline" Class="section-label">Join a lobby</MudText>
                 <form @onsubmit="JoinLobbyFromForm">
                     <MudStack Spacing="3" Class="mt-4">
                         <MudTextField T="string" Label="Lobby code" Variant="Variant.Outlined" MaxLength="10" @bind-Value="_joinCode" Immediate="true" />
-                        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="@_isProcessing" StartIcon="@(_isProcessing ? null : Icons.Material.Filled.Login)">
+                        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Class="align-self-start" Disabled="@_isProcessing" StartIcon="@(_isProcessing ? null : Icons.Material.Outlined.Login)">
                             @if (_isProcessing) {
                                 <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
                             }
@@ -64,16 +67,19 @@
                         </MudButton>
                     </MudStack>
                 </form>
-                <MudText Color="Color.Secondary" Class="mt-6">2–20 signed-in players. Everyone receives the same questions. Only the host starts the match once all players are ready.</MudText>
-                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-3">Need a break? Keep your lobby link to reconnect. The server clock continues if you disconnect.</MudText>
-            </MudPaper>
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-6 measure">A lobby holds 2 to 20 signed-in players. Only the host can start the match, and only when everyone is ready.</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-3 measure">If you lose your connection, open the lobby link again to rejoin. The match clock keeps running without you.</MudText>
+            </div>
         </MudItem>
     </MudGrid>
 } else {
-    <MudPaper Class="@($"{AppTheme.CardPadding} {AppTheme.SectionGap}")">
+    <MudPaper Elevation="0" Class="@AppTheme.Panel">
         <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
-            <MudText Typo="Typo.h6">Lobby @_view.Code</MudText>
-            <MudChip T="string" Color="@(_view.Status == "playing" ? Color.Primary : Color.Default)" role="timer">@TimerText</MudChip>
+            <div>
+                <MudText Typo="Typo.overline" Color="Color.Secondary">Lobby code</MudText>
+                <MudText Typo="Typo.h4" Class="code-text">@_view.Code</MudText>
+            </div>
+            <div class="timer" role="timer">@TimerText</div>
         </MudStack>
         <MudText Class="mt-3">@SettingsText</MudText>
         <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">@BreakdownText</MudText>
@@ -99,7 +105,6 @@
         <MudStack Spacing="2" Class="mt-5">
             @foreach (var player in _view.Players) {
                 <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
-                    <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" />
                     <MudText><strong>@player.Name</strong></MudText>
                     @if (player.Id == _view.Host) {
                         <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined">Host</MudChip>
@@ -112,7 +117,7 @@
             }
         </MudStack>
     </MudPaper>
-    <MudPaper Class="@($"{AppTheme.CardPadding} {AppTheme.SectionGap}")">
+    <MudPaper Elevation="0" Class="@($"{AppTheme.Panel} mt-6")">
         <LobbyGameArea View="_view"
                        WaitingForHost="_waitingForHost"
                        SelectedChoice="_selectedChoice"
