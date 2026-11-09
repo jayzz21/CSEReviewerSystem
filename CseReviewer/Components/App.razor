@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <base href="/">
+    <title>Husay · CSE Reviewer</title>
+    <link rel="stylesheet" href="/app.css">
+    <script>
+        (function () {
+            try {
+                if (localStorage.getItem('dark_mode') === 'true') {
+                    document.documentElement.classList.add('dark');
+                }
+            } catch (_) {}
+        })();
+    </script>
+    <HeadOutlet @rendermode="RenderModeForPage" />
+</head>
+<body class="bg-slate-50 text-slate-800">
+    <Routes @rendermode="RenderModeForPage" />
+    <script src="/theme.js" defer></script>
+    <script src="/password-toggle.js" defer></script>
+    <script src="_framework/blazor.web.js"></script>
+</body>
+</html>
+
+@code {
+    #region Properties
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+    private static readonly IComponentRenderMode _interactiveWithoutPrerender = new InteractiveServerRenderMode(prerender: false);
+    private IComponentRenderMode? RenderModeForPage => IsSignInPage ? null : _interactiveWithoutPrerender;
+    private bool IsSignInPage {
+        get {
+            var path = HttpContext.Request.Path;
+            return path.StartsWithSegments("/Login") || path.StartsWithSegments("/Register") || path.StartsWithSegments("/Change-Password");
+        }
+    }
+    #endregion
+}

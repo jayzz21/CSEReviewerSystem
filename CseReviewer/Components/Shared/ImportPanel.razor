@@ -1,0 +1,170 @@
+@using System.Text.RegularExpressions
+@inject BankService Bank
+@inject CurrentUserAccessor Users
+
+<section class="panel p-6 mt-8" aria-labelledby="import-heading">
+    <h2 id="import-heading" class="font-bold text-xl">Add questions from an HTML file</h2>
+    <p class="text-sm text-slate-500 mt-2">Import to the shared question bank and create random sets without AI. Imported content is supplied by you, not verified by CSC.</p>
+    <div class="relative mt-4 rounded-xl border-2 border-dashed border-teal-600 p-6 text-center">
+        <label for="import-file" class="cursor-pointer">Drop an HTML reviewer here, or choose a file</label>
+        <InputFile id="import-file" OnChange="PreviewFile" accept=".html,.htm" disabled="@_isProcessing" aria-describedby="import-help" class="absolute inset-0 mt-0 h-full w-full cursor-pointer opacity-0" />
+    </div>
+    <p id="import-help" class="text-xs text-slate-500 mt-3">Maximum 2 MB. Supports the supplied CSE_2027_Reviewer.html and the <a class="underline text-teal-700" href="/import-template.html" download>downloadable import template</a>. Future files need the template's JSON format. Legacy questions use Easy difficulty; numerical explanations are preserved as supplied.</p>
+    <div class="mt-4" role="status" aria-live="polite">
+        @if (_preview != null) {
+            <p>@PreviewSummary</p>
+            <p>@string.Join(" · ", _preview.Categories.Select(c => $"{c.Category}: {c.Count}"))</p>
+            @if (_preview.Issues.Count > 0) {
+                <details>
+                    <summary>Review excluded questions</summary>
+                    @foreach (var issue in _preview.Issues) {
+                        <p>@issue</p>
+                    }
+                </details>
+            }
+        } else {
+            <p>@_message</p>
+        }
+    </div>
+    @if (_pendingInput != null) {
+        <button type="button" class="primary mt-4" disabled="@_isProcessing" @onclick="ConfirmImport">Import valid questions &amp; create a practice set</button>
+    }
+    @if (_createdSetId != null) {
+        <a href="/Practice/@_createdSetId" class="primary inline-block mt-4">Start the new practice set →</a>
+    }
+    <div class="rounded-xl bg-teal-50 p-4 mt-4" role="status" aria-live="polite">
+        <p class="text-sm font-semibold text-teal-900">Questions saved in your imported database bank</p>
+        <p id="bank-total" class="text-3xl font-bold text-teal-800 mt-1">@BankTotalText</p>
+        <p class="text-xs text-teal-800 mt-2">Questions available to all study accounts. Repeated questions and copies in saved practice sets are not counted again.</p>
+    </div>
+    <div class="text-sm text-slate-500 mt-4">
+        @if (_bankRows == null) {
+            <p>@_bankMessage</p>
+        } else if (_bankRows.Count == 0) {
+            <p>Your imported bank is empty. Choose a file to preview it.</p>
+        } else {
+            <div class="bank-table-scroll" tabindex="0" role="region" aria-label="Question counts by subject and difficulty">
+                <table class="bank-table">
+                    <caption>Imported question bank · all exam levels</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">Subject</th>
+                            @foreach (var difficulty in Difficulties) {
+                                <th scope="col">@difficulty</th>
+                            }
+                            <th scope="col">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var subject in Subjects) {
+                            <tr>
+                                <th scope="row">@subject</th>
+                                @foreach (var difficulty in Difficulties) {
+                                    <td>@CountFor(subject, difficulty).ToString("N0")</td>
+                                }
+                                <td>@_bankRows.Where(r => r.Category == subject).Sum(r => r.Count).ToString("N0")</td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <th scope="row">Total questions</th>
+                            @foreach (var difficulty in Difficulties) {
+                                <td>@_bankRows.Where(r => r.Difficulty == difficulty).Sum(r => r.Count).ToString("N0")</td>
+                            }
+                            <td>@_bankRows.Sum(r => r.Count).ToString("N0")</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        }
+    </div>
+</section>
+
+@code {
+    #region Properties
+    [Parameter] public EventCallback OnBankUpdated { get; set; }
+    private const int _maxFileBytes = 2_000_000;
+    private List<BankSummaryRow>? _bankRows;
+    private ImportPreview? _preview;
+    private ImportInput? _pendingInput;
+    private Guid? _createdSetId;
+    private string _userId = "";
+    private string _message = "";
+    private string _bankMessage = "Loading…";
+    private int _previewVersion;
+    private bool _isProcessing;
+    private string BankTotalText => _bankRows == null ? _bankMessage : _bankRows.Sum(r => r.Count).ToString("N0");
+    private string PreviewSummary => $"{_preview!.Title}: {_preview.Valid} valid unique questions. {_preview.NewQuestions} new to your bank; {_preview.Valid - _preview.NewQuestions} already stored; {_preview.Duplicates} repeated within the file; {_preview.Issues.Count} invalid and excluded.";
+    private List<string> Difficulties {
+        get {
+            var all = new List<string> { "Easy", "Moderate", "Hard" };
+            all.AddRange(_bankRows!.Select(r => r.Difficulty).Distinct().Where(d => !all.Contains(d)));
+            return all;
+        }
+    }
+    private List<string> Subjects => _bankRows!.Select(r => r.Category).Distinct().Order().ToList();
+    #endregion
+
+    #region Lifecycle
+    protected override async Task OnInitializedAsync() {
+        _userId = (await Users.Get()).Id;
+        await LoadBankSummary();
+    }
+    #endregion
+
+    #region Methods
+    private int CountFor(string subject, string difficulty) {
+        return _bankRows!.Where(r => r.Category == subject && r.Difficulty == difficulty).Sum(r => r.Count);
+    }
+
+    private async Task LoadBankSummary() {
+        try { _bankRows = await Bank.GetBankSummary(); }
+        catch (Exception ex) { _bankRows = null; _bankMessage = ex.Message; }
+    }
+
+    private async Task PreviewFile(InputFileChangeEventArgs e) {
+        var version = ++_previewVersion;
+        _pendingInput = null;
+        _preview = null;
+        _createdSetId = null;
+        var file = e.File;
+        if (!Regex.IsMatch(file.Name, @"\.html?$", RegexOptions.IgnoreCase) || file.Size > _maxFileBytes) {
+            _message = "Choose an HTML file smaller than 2 MB.";
+            return;
+        }
+        _message = "Reading and validating questions…";
+        try {
+            using var reader = new StreamReader(file.OpenReadStream(_maxFileBytes));
+            var input = new ImportInput(file.Name, await reader.ReadToEndAsync());
+            var result = await Bank.PreviewImport(_userId, input);
+            if (version != _previewVersion) return;
+            if (!result.IsSuccess) { _message = result.Error.Length > 0 ? result.Error : "You do not have permission to import questions."; return; }
+            _preview = result.Value;
+            if (_preview!.Valid > 0) _pendingInput = input;
+        } catch (Exception ex) {
+            if (version == _previewVersion) _message = ex.Message;
+        }
+    }
+
+    private async Task ConfirmImport() {
+        if (_pendingInput == null || _isProcessing) return;
+        _isProcessing = true;
+        try {
+            var result = await Bank.ImportQuestions(_userId, _pendingInput);
+            if (!result.IsSuccess) { _message = result.Error; return; }
+            var summary = result.Value!;
+            _pendingInput = null;
+            _preview = null;
+            _createdSetId = summary.Id;
+            _message = $"{summary.Added:N0} new questions saved. Total in your imported database bank: {summary.TotalQuestions:N0}. Skipped {summary.Duplicates} duplicates and {summary.Skipped} invalid entries. Created a practice set of {summary.Count} questions.";
+            await LoadBankSummary();
+            await OnBankUpdated.InvokeAsync();
+        } catch (Exception ex) {
+            _message = ex.Message;
+        } finally {
+            _isProcessing = false;
+        }
+    }
+    #endregion
+}

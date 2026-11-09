@@ -1,0 +1,365 @@
+@page "/Multiplayer"
+@attribute [Authorize]
+@implements IDisposable
+@using System.Security.Claims
+@inject LobbyService Lobbies
+@inject LobbyNotifier Notifier
+@inject AuthenticationStateProvider AuthState
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<p class="eyebrow mt-6">PRACTICE TOGETHER</p>
+<h1 class="text-3xl font-bold mt-3">Multiplayer challenge</h1>
+<p role="status" aria-live="polite" class="mt-4">@_message</p>
+
+@if (_isLoading) {
+    <p class="mt-6">Loading…</p>
+} else if (_view == null) {
+    <div class="grid md:grid-cols-2 gap-7 mt-6">
+        <section class="panel p-6">
+            <h2 class="text-xl font-bold">Create a lobby</h2>
+            <form class="space-y-4 mt-4" @onsubmit="CreateNewLobby">
+                <label class="block">Exam level
+                    <select @bind="_level" @bind:after="ResetCategory">
+                        <option>Professional</option>
+                        <option>Subprofessional</option>
+                    </select>
+                </label>
+                <label class="block">Category
+                    <select @bind="_category">
+                        @foreach (var category in GetCategories()) {
+                            <option>@category</option>
+                        }
+                    </select>
+                </label>
+                <label class="block">Game mode
+                    <select @bind="_mode">
+                        <option value="test">Timed test · most correct wins</option>
+                        <option value="speed">Speed rounds · first correct wins</option>
+                    </select>
+                </label>
+                <label class="block">Number of questions
+                    <input type="number" min="30" max="180" step="1" required @bind="_count" @bind:event="oninput">
+                </label>
+                <label class="block">@(_mode == "speed" ? "Minutes per question" : "Minutes for the entire test")
+                    <input type="number" min="1" step="1" required @bind="_minutes" @bind:event="oninput">
+                    <span class="text-sm muted">Enter any positive whole number of minutes, such as 10, 30, or 120.</span>
+                </label>
+                <p class="text-sm text-slate-500">@RulesText</p>
+                <button class="primary" type="submit" disabled="@_isProcessing">Create lobby</button>
+            </form>
+        </section>
+        <section class="panel p-6">
+            <h2 class="text-xl font-bold">Join your friends</h2>
+            <form class="space-y-4 mt-4" @onsubmit="JoinLobbyFromForm">
+                <label class="block">Lobby code
+                    <input maxlength="10" pattern="[a-fA-F0-9]{10}" required autocomplete="off" @bind="_joinCode" @bind:event="oninput">
+                </label>
+                <button class="primary" type="submit" disabled="@_isProcessing">Join lobby</button>
+            </form>
+            <p class="mt-6 text-slate-500">2–20 signed-in players. Everyone receives the same questions. Only the host starts the match once all players are ready.</p>
+            <p class="mt-4 text-sm text-slate-500">Need a break? Keep your lobby link to reconnect. The server clock continues if you disconnect.</p>
+        </section>
+    </div>
+} else {
+    <section class="mt-6">
+        <div class="panel p-6">
+            <div class="flex flex-wrap justify-between gap-3">
+                <h2 class="text-xl font-bold">Lobby <span>@_view.Code</span></h2>
+                <strong role="timer">@TimerText</strong>
+            </div>
+            <p class="mt-3">@SettingsText</p>
+            <p class="mt-3 text-sm">@BreakdownText</p>
+            <div class="flex flex-wrap gap-3 mt-4">
+                <input readonly aria-label="Shareable lobby link" value="@ShareLink">
+                <button type="button" class="secondary" @onclick="CopyLink">Copy link</button>
+            </div>
+            <div class="flex flex-wrap gap-3 mt-4">
+                @if (IsWaiting) {
+                    <button type="button" class="secondary" disabled="@_isProcessing" @onclick="ToggleReady">@(_view.Ready ? "Not ready" : "I am ready")</button>
+                }
+                @if (IsWaiting && IsHost) {
+                    <button type="button" class="primary" disabled="@(_isProcessing || !CanStart)" @onclick="StartMatch">Start match</button>
+                }
+                @if (_view.Status == "finished" && !_waitingForHost) {
+                    <button type="button" class="primary" disabled="@_isProcessing" @onclick="PlayAgain">@(IsHost ? "🎮 New game · back to lobby" : "🔄 Back to lobby")</button>
+                }
+                @if (_view.Status != "playing" && _view.Status != "cancelled") {
+                    <button type="button" class="secondary" disabled="@_isProcessing" @onclick="LeaveLobby">@LeaveButtonText</button>
+                }
+                @if (IsHost && _view.Status == "waiting") {
+                    <button type="button" class="secondary" disabled="@_isProcessing" @onclick="CancelLobby">Cancel lobby</button>
+                }
+            </div>
+            <div class="mt-5 space-y-2">
+                @foreach (var player in _view.Players) {
+                    <p><strong>@player.Name</strong>@(player.Id == _view.Host ? " · Host" : "")@(player.Id == _view.Me ? " · You" : "") — @PlayerStatus(player)</p>
+                }
+            </div>
+        </div>
+        <div class="panel p-6 mt-6">
+            <LobbyGameArea View="_view"
+                           WaitingForHost="_waitingForHost"
+                           SelectedChoice="_selectedChoice"
+                           IsProcessing="_isProcessing"
+                           OnChoiceSelected="SelectChoice"
+                           OnSubmitAnswer="SubmitAnswer"
+                           OnCloseLobby="CloseRoom" />
+        </div>
+    </section>
+}
+
+@code {
+    #region Properties
+    [SupplyParameterFromQuery(Name = "code")] public string? CodeFromLink { get; set; }
+    private const int _clockTickMilliseconds = 1000;
+    private const int _safetyRefreshSeconds = 30;
+    private readonly SemaphoreSlim _refreshLock = new(1, 1);
+    private LobbyView? _view;
+    private string _userId = "";
+    private string _userName = "";
+    private string _level = "Professional";
+    private string _category = "All 4 Subjects (Final Mock Exam)";
+    private string _mode = "test";
+    private int _count = 30;
+    private int _minutes = 3;
+    private string _joinCode = "";
+    private string _message = "";
+    private bool _isLoading = true;
+    private bool _isProcessing;
+    private bool _isDisposed;
+    private bool _waitingForHost;
+    private int? _selectedChoice;
+    private string _questionKey = "";
+    private DateTime? _refreshedForEnd;
+    private int _secondsSinceRefresh;
+    private IDisposable? _subscription;
+    private System.Threading.Timer? _clock;
+    private bool IsHost => _view != null && _view.Host == _view.Me;
+    private bool IsWaiting => _view != null && _view.Status == "waiting";
+    private bool CanStart => _view != null && _view.Players.Count >= 2 && _view.Players.All(p => p.Ready);
+    private string ShareLink => _view == null ? "" : Navigation.BaseUri.TrimEnd('/') + "/Multiplayer?code=" + _view.Code;
+    private string LeaveButtonText => _view != null && _view.Status == "finished" && IsHost ? "Close lobby & leave" : "Leave lobby";
+    private string RulesText => _mode == "speed"
+        ? "First correct answer received by the server wins the round. A wrong answer eliminates you for that round. Five seconds of review follow each round. Most rounds won wins the match; equal scores draw."
+        : "Answer at your own pace before the shared timer ends. Most correct answers wins; equal scores draw. Answers are revealed only when the match ends.";
+    #endregion
+
+    #region Lifecycle
+    protected override async Task OnInitializedAsync() {
+        try {
+            await LoadCurrentUser();
+            if (!string.IsNullOrWhiteSpace(CodeFromLink)) await RunAction(() => JoinLobbyByCode(CodeFromLink.Trim().ToUpperInvariant()));
+        } finally {
+            _isLoading = false;
+        }
+    }
+
+    public void Dispose() {
+        _isDisposed = true;
+        StopRoomTracking();
+    }
+    #endregion
+
+    #region Display text
+    private string TimerText {
+        get {
+            if (_view == null || _view.Status != "playing") return _view?.Status.ToUpperInvariant() ?? "";
+            var end = _view.NextRoundAt ?? _view.Deadline;
+            var seconds = end == null ? 0 : Math.Max(0, (int)Math.Ceiling((end.Value - DateTime.UtcNow).TotalSeconds));
+            var label = _view.NextRoundAt != null ? "Next round in " : "Time left ";
+            return $"{label}{seconds / 60}:{seconds % 60:00}";
+        }
+    }
+
+    private string SettingsText {
+        get {
+            var speed = _view!.Mode == "speed";
+            return $"Game {_view.Game} · {_view.Level} · {_view.Category} · {_view.Count} questions · {(speed ? "Speed rounds" : "Timed test")} · {_view.Minutes} min {(speed ? "per question" : "total")}";
+        }
+    }
+
+    private string BreakdownText => string.Join(" · ", _view!.Breakdown.Select(x => $"{x.Category}: {x.Count}"));
+
+    private string PlayerStatus(LobbyPlayerView player) {
+        if (IsWaiting) return player.Ready ? "Ready" : "Not ready";
+        return $"{player.Answered} answered{(player.Score == null ? "" : $" · {player.Score} points")}";
+    }
+
+    private List<string> GetCategories() => [
+        "All 4 Subjects (Final Mock Exam)",
+        "Numerical Ability",
+        "Verbal Ability",
+        _level == "Professional" ? "Analytical Ability" : "Clerical Ability",
+        "General Information"
+    ];
+    #endregion
+
+    #region Setup
+    private async Task LoadCurrentUser() {
+        var state = await AuthState.GetAuthenticationStateAsync();
+        _userId = state.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
+        _userName = state.User.Identity?.Name ?? "";
+    }
+
+    private void ResetCategory() {
+        _category = GetCategories()[0];
+    }
+
+    private async Task RunAction(Func<Task> work) {
+        if (_isProcessing) return;
+        _isProcessing = true;
+        _message = "";
+        try { await work(); }
+        catch (Exception ex) { _message = ex.Message; }
+        finally { _isProcessing = false; }
+    }
+    #endregion
+
+    #region Opening and closing a lobby
+    private Task CreateNewLobby() => RunAction(async () => {
+        var created = await Lobbies.Create(_userId, _userName, new CreateLobby(_category, _level, _mode, _count, _minutes));
+        if (!created.IsSuccess) { _message = created.Error; return; }
+        await OpenRoom(await Lobbies.Read(created.Value!, _userId, _userName));
+    });
+
+    private Task JoinLobbyFromForm() => RunAction(() => JoinLobbyByCode(_joinCode.Trim().ToUpperInvariant()));
+
+    private async Task JoinLobbyByCode(string code) {
+        await OpenRoom(await Lobbies.Join(code, _userId, _userName));
+    }
+
+    private async Task OpenRoom(ServiceResult<LobbyView> result) {
+        if (!result.IsSuccess) { _message = ErrorText(result); return; }
+        StopRoomTracking();
+        _view = null;
+        _waitingForHost = false;
+        _questionKey = "";
+        ApplyView(result.Value!);
+        _subscription = Notifier.Subscribe(result.Value!.Code, OnLobbyChanged);
+        StartClock();
+        await JS.InvokeVoidAsync("history.replaceState", null, "", "/Multiplayer?code=" + result.Value.Code);
+        await RefreshView();
+    }
+
+    private async Task CloseRoom() {
+        StopRoomTracking();
+        _view = null;
+        _waitingForHost = false;
+        _selectedChoice = null;
+        await JS.InvokeVoidAsync("history.replaceState", null, "", "/Multiplayer");
+    }
+
+    private void StartClock() {
+        _clock = new System.Threading.Timer(_ => { _ = InvokeAsync(ClockTick); }, null, _clockTickMilliseconds, _clockTickMilliseconds);
+    }
+
+    private void StopRoomTracking() {
+        _subscription?.Dispose();
+        _subscription = null;
+        _clock?.Dispose();
+        _clock = null;
+    }
+    #endregion
+
+    #region Keeping the lobby up to date
+    private Task OnLobbyChanged() => InvokeAsync(async () => {
+        await RefreshView();
+        if (!_isDisposed) StateHasChanged();
+    });
+
+    private async Task ClockTick() {
+        if (_isDisposed || _view == null) return;
+        if (_view.Status == "cancelled") { StopRoomTracking(); StateHasChanged(); return; }
+        _secondsSinceRefresh++;
+        var end = _view.Status == "playing" ? (_view.NextRoundAt ?? _view.Deadline) : null;
+        var deadlinePassed = end != null && DateTime.UtcNow >= end && _refreshedForEnd != end;
+        if (deadlinePassed) _refreshedForEnd = end;
+        if (deadlinePassed || _secondsSinceRefresh >= _safetyRefreshSeconds) await RefreshView();
+        if (!_isDisposed) StateHasChanged();
+    }
+
+    private async Task RefreshView() {
+        if (_view == null || _isDisposed) return;
+        var code = _view.Code;
+        await _refreshLock.WaitAsync();
+        try {
+            var result = await Lobbies.Read(code, _userId, _userName);
+            if (_view == null || _view.Code != code) return;
+            if (result.IsSuccess) ApplyView(result.Value!);
+            else _message = ErrorText(result);
+        } catch (Exception ex) {
+            _message = "Connection interrupted. " + ex.Message;
+        } finally {
+            _refreshLock.Release();
+        }
+    }
+
+    private void ApplyView(LobbyView view) {
+        if (_view != null && _view.Code == view.Code && view.ServerTime < _view.ServerTime) return;
+        _view = view;
+        _secondsSinceRefresh = 0;
+        if (view.Status != "finished") _waitingForHost = false;
+        var key = $"{view.Game}|{view.Status}|{view.Index}|{view.Answered}|{view.NextRoundAt}";
+        if (key == _questionKey) return;
+        _questionKey = key;
+        _selectedChoice = null;
+    }
+
+    private static string ErrorText(ServiceResult result) {
+        if (result.Error.Length > 0) return result.Error;
+        return result.Status == 403 ? "Only the host can do that." : "Request failed. Please retry.";
+    }
+    #endregion
+
+    #region Player actions
+    private Task ToggleReady() => RunAction(async () => ApplyActionResult(await Lobbies.SetReady(_view!.Code, _userId, _userName, !_view.Ready)));
+
+    private Task StartMatch() => RunAction(async () => ApplyActionResult(await Lobbies.Start(_view!.Code, _userId, _userName)));
+
+    private Task CancelLobby() => RunAction(async () => {
+        if (!await JS.InvokeAsync<bool>("confirm", "Close this lobby for everyone? Players will be returned to the main screen.")) return;
+        var result = await Lobbies.Cancel(_view!.Code, _userId, _userName);
+        if (result.IsSuccess && result.Value!.Status == "cancelled") await CloseRoom();
+        else ApplyActionResult(result);
+    });
+
+    private Task LeaveLobby() => RunAction(async () => {
+        if (_view!.Status == "finished" && IsHost && !await JS.InvokeAsync<bool>("confirm", "Leave and close the lobby? All players will be disconnected.")) return;
+        var result = await Lobbies.Leave(_view.Code, _userId, _userName);
+        if (result.IsSuccess) await CloseRoom();
+        else ApplyActionResult(result);
+    });
+
+    private Task PlayAgain() => RunAction(async () => {
+        if (!IsHost) { _waitingForHost = true; return; }
+        ApplyActionResult(await Lobbies.Replay(_view!.Code, _userId, _userName, _view.Game));
+    });
+
+    private void SelectChoice(int choice) {
+        _selectedChoice = choice;
+    }
+
+    private Task SubmitAnswer() => RunAction(async () => {
+        if (_selectedChoice == null) return;
+        var answer = new LobbyAction(_view!.Index, _selectedChoice.Value, _view.Game);
+        var result = await Lobbies.Answer(_view.Code, _userId, _userName, answer);
+        ApplyActionResult(result);
+        if (!result.IsSuccess) await RefreshView();
+    });
+
+    private async Task CopyLink() {
+        try {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", ShareLink);
+            _message = "Lobby link copied.";
+        } catch (JSException) {
+            _message = "Select and copy the lobby link above.";
+        }
+    }
+
+    private void ApplyActionResult(ServiceResult<LobbyView> result) {
+        if (result.IsSuccess) ApplyView(result.Value!);
+        else _message = ErrorText(result);
+    }
+    #endregion
+}

@@ -8,7 +8,7 @@ try {
     }
     $deploymentConfig = Get-Content deploy/appsettings.json -Raw | ConvertFrom-Json
     if ($deploymentConfig.ConnectionStrings.Study) { throw 'Deployment settings must use the environment variable, not an embedded connection string.' }
-    foreach ($file in @('app.js','login.js','admin.js','import.js','multiplayer.js','multiplayer-redirect.js')) {
+    foreach ($file in @('theme.js','password-toggle.js')) {
         & node --check "CseReviewer/wwwroot/$file"
         if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax check failed: $file" }
     }
@@ -19,7 +19,7 @@ try {
     Copy-Item -LiteralPath deploy/appsettings.json -Destination artifacts/deploy-check/appsettings.json -Force
     $developmentConfig = Join-Path $projectRoot 'artifacts/deploy-check/appsettings.Development.json'
     if (Test-Path -LiteralPath $developmentConfig) { Remove-Item -LiteralPath $developmentConfig }
-    foreach ($file in @('CseReviewer.dll','wwwroot/login.html','wwwroot/app.css')) {
+    foreach ($file in @('CseReviewer.dll','wwwroot/theme.js','wwwroot/app.css')) {
         if (!(Test-Path -LiteralPath "artifacts/deploy-check/$file")) { throw "Publish output is missing: $file" }
     }
     Write-Host 'PASS: deployment files, JavaScript, Tailwind, and Linux publish.'

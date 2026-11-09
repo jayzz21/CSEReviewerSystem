@@ -1,0 +1,53 @@
+@page "/My-Saved-Sets"
+@attribute [Authorize]
+@inject PracticeService Practice
+@inject CurrentUserAccessor Users
+
+<PageTitle>My saved sets · Husay</PageTitle>
+
+<NoticeBanner Message="@_notice" />
+
+<p class="eyebrow">YOUR PERSONAL LIBRARY</p>
+<h1 class="text-3xl font-bold mt-3">Saved for your next study session.</h1>
+<p class="text-slate-500 mt-3">Your sets and saved progress are stored in the database and linked to your account.</p>
+
+<div class="grid md:grid-cols-2 gap-5 mt-8">
+    @if (_isLoading) {
+        <p>Loading…</p>
+    } else if (_sets.Count == 0) {
+        <div class="panel p-8 col-span-full">
+            <h2 class="text-xl font-bold">A fresh start for your library.</h2>
+            <p class="text-slate-500 mt-3">Your unfinished sets appear here when you choose Save progress before leaving a quiz.</p>
+        </div>
+    } else {
+        @foreach (var set in _sets) {
+            <article class="panel p-6">
+                <p class="eyebrow">@set.Source · @set.Count QUESTIONS</p>
+                <h2 class="text-xl font-bold mt-3">@set.Title</h2>
+                <p class="text-sm text-slate-500 mt-2">@set.Level · @set.Difficulty</p>
+                <a href="/Practice/@set.Id" class="secondary mt-5 inline-block">Resume practice →</a>
+            </article>
+        }
+    }
+</div>
+
+@code {
+    #region Properties
+    private List<StudySetSummary> _sets = [];
+    private string _notice = "";
+    private bool _isLoading = true;
+    #endregion
+
+    #region Lifecycle
+    protected override async Task OnInitializedAsync() {
+        try {
+            var user = await Users.Get();
+            _sets = await Practice.GetSavedSets(user.Id);
+        } catch (Exception ex) {
+            _notice = ex.Message;
+        } finally {
+            _isLoading = false;
+        }
+    }
+    #endregion
+}

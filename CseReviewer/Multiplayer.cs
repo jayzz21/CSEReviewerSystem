@@ -1,7 +1,4 @@
 using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Text.Json;
-using Microsoft.EntityFrameworkCore;
 
 namespace CseReviewer;
 public class Lobby {
@@ -47,110 +44,36 @@ public static class Multiplayer {
         IF OBJECT_ID(N'dbo.Lobbies', N'U') IS NULL
           CREATE TABLE dbo.Lobbies (Code nvarchar(10) NOT NULL PRIMARY KEY, Data nvarchar(max) NOT NULL);
         """;
+
     public static void Map(RouteGroupBuilder api) {
-        api.MapPost("/lobbies", async (CreateLobby r, StudyDb db, HttpContext c) => {
-            if (r.Mode is not ("test" or "speed") || r.Count is < 30 or > 180 || r.Minutes < 1 || r.Level is not ("Professional" or "Subprofessional") || !Catalog.Categories.Contains(r.Category) || (r.Category == "Clerical Ability" && r.Level != "Subprofessional") || (r.Category == "Analytical Ability" && r.Level != "Professional"))
-                return Results.BadRequest(new { error = "Choose a valid category, level, mode, 30–180 questions and a positive whole number of minutes." });
-            var categories = ImportedBank.GetTargetCategories(r.Category, r.Level);
-            var rows = await db.BankQuestions.AsNoTracking().Where(q => categories.Contains(q.Category) && (q.Level == r.Level || q.Level == "Both")).ToListAsync();
-            var questions = new List<LobbyQuestion>();
-            for (var i = 0; i < categories.Count; i++) {
-                var needed = r.Count / categories.Count + (i < r.Count % categories.Count ? 1 : 0);
-                var candidates = rows.Where(q => q.Category == categories[i]).Select(q => JsonSerializer.Deserialize<ImportEntry>(q.Data)!).GroupBy(q => q.Prompt.Trim().ToUpperInvariant()).Select(g => g.First()).OrderBy(_ => RandomNumberGenerator.GetInt32(int.MaxValue)).ToList();
-                if (candidates.Count < needed) return Results.BadRequest(new { error = $"{categories[i]} needs {needed} unique questions, but only {candidates.Count} are available. Choose fewer questions or ask an administrator to add more." });
-                foreach (var q in candidates.Take(needed)) {
-                    var order = Enumerable.Range(0, 4).OrderBy(_ => RandomNumberGenerator.GetInt32(int.MaxValue)).ToArray();
-                    questions.Add(new(q.Category, new Question(q.Prompt, order.Select(x => q.Options[x]).ToArray(), Array.IndexOf(order, q.Answer), q.Explanation, q.Steps)));
-                }
-            }
-            var state = new LobbyState { Host = User(c), Category = r.Category, Level = r.Level, Mode = r.Mode, Minutes = r.Minutes, Questions = questions.OrderBy(_ => RandomNumberGenerator.GetInt32(int.MaxValue)).ToList(), Players = [new() { Id = User(c), Name = c.User.Identity!.Name!, Ready = true }] };
-            var lobby = new Lobby { Code = Convert.ToHexString(RandomNumberGenerator.GetBytes(5)), Data = JsonSerializer.Serialize(state) };
-            db.Lobbies.Add(lobby); await db.SaveChangesAsync();
-            return Results.Ok(new { lobby.Code, path = "/multiplayer.html?code=" + lobby.Code });
-        });
-        api.MapGet("/lobbies/{code}", (string code, StudyDb db, HttpContext c) => Access(code, db, c, "read"));
-        api.MapPost("/lobbies/{code}/join", (string code, StudyDb db, HttpContext c) => Access(code, db, c, "join"));
-        api.MapPost("/lobbies/{code}/ready", (string code, ReadyLobby r, StudyDb db, HttpContext c) => Access(code, db, c, r.Ready ? "ready" : "unready"));
-        api.MapPost("/lobbies/{code}/start", (string code, StudyDb db, HttpContext c) => Access(code, db, c, "start"));
-        api.MapPost("/lobbies/{code}/replay", (string code, ReplayLobby r, StudyDb db, HttpContext c) => Access(code, db, c, "replay", replayGame: r.Game));
-        api.MapPost("/lobbies/{code}/answer", (string code, LobbyAction r, StudyDb db, HttpContext c) => Access(code, db, c, "answer", r));
-        api.MapPost("/lobbies/{code}/leave", (string code, StudyDb db, HttpContext c) => Access(code, db, c, "leave"));
-        api.MapPost("/lobbies/{code}/cancel", (string code, StudyDb db, HttpContext c) => Access(code, db, c, "cancel"));
+        api.MapPost("/lobbies", async (CreateLobby r, LobbyService lobbies, HttpContext c) =>
+            (await lobbies.Create(UserId(c), UserName(c), r)).ToHttp(code => new { code, path = "/Multiplayer?code=" + code }));
+        api.MapGet("/lobbies/{code}", async (string code, LobbyService lobbies, HttpContext c) =>
+            Respond(c, await lobbies.Read(code, UserId(c), UserName(c))));
+        api.MapPost("/lobbies/{code}/join", async (string code, LobbyService lobbies, HttpContext c) =>
+            Respond(c, await lobbies.Join(code, UserId(c), UserName(c))));
+        api.MapPost("/lobbies/{code}/ready", async (string code, ReadyLobby r, LobbyService lobbies, HttpContext c) =>
+            Respond(c, await lobbies.SetReady(code, UserId(c), UserName(c), r.Ready)));
+        api.MapPost("/lobbies/{code}/start", async (string code, LobbyService lobbies, HttpContext c) =>
+            Respond(c, await lobbies.Start(code, UserId(c), UserName(c))));
+        api.MapPost("/lobbies/{code}/replay", async (string code, ReplayLobby r, LobbyService lobbies, HttpContext c) =>
+            Respond(c, await lobbies.Replay(code, UserId(c), UserName(c), r.Game)));
+        api.MapPost("/lobbies/{code}/answer", async (string code, LobbyAction r, LobbyService lobbies, HttpContext c) =>
+            Respond(c, await lobbies.Answer(code, UserId(c), UserName(c), r)));
+        api.MapPost("/lobbies/{code}/leave", async (string code, LobbyService lobbies, HttpContext c) =>
+            Respond(c, await lobbies.Leave(code, UserId(c), UserName(c))));
+        api.MapPost("/lobbies/{code}/cancel", async (string code, LobbyService lobbies, HttpContext c) =>
+            Respond(c, await lobbies.Cancel(code, UserId(c), UserName(c))));
     }
-    private static string User(HttpContext c) => c.User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-    // Row locks serialize answers across processes and deploys: one round has one winner.
-    private static async Task<IResult> Access(string code, StudyDb db, HttpContext c, string action, LobbyAction? answer = null, int? replayGame = null) {
-        code = code.ToUpperInvariant();
-        if (code.Length != 10 || code.Any(x => !Uri.IsHexDigit(x))) return Results.NotFound(new { error = "Lobby not found. Check the code." });
-        await using var transaction = await db.Database.BeginTransactionAsync();
-        var lobby = db.Database.IsSqlServer()
-            ? await db.Lobbies.FromSqlInterpolated($"SELECT * FROM dbo.Lobbies WITH (UPDLOCK, ROWLOCK) WHERE Code = {code}").SingleOrDefaultAsync()
-            : (await db.Lobbies.FromSqlInterpolated($"SELECT * FROM \"Lobbies\" WHERE \"Code\" = {code} FOR UPDATE").ToListAsync()).SingleOrDefault();
-        if (lobby == null) return Results.NotFound(new { error = "Lobby not found. Check the code." });
-        var s = JsonSerializer.Deserialize<LobbyState>(lobby.Data)!;
-        var me = s.Players.SingleOrDefault(p => p.Id == User(c));
-        var now = DateTime.UtcNow;
-        if (s.Status == "waiting" && now > (s.WaitingSince ?? s.Created).AddHours(24)) s.Status = "cancelled";
-        Tick(s, now);
-        string? error = null;
-        if (me == null) {
-            if (action != "join") return Results.NotFound(new { error = "Join the lobby first." });
-            if (s.Status != "waiting") return Results.Conflict(new { error = "This lobby has already started or closed." });
-            if (s.Players.Count >= 20) return Results.Conflict(new { error = "This lobby is full (20 players)." });
-            me = new() { Id = User(c), Name = c.User.Identity!.Name! }; s.Players.Add(me);
-        }
-        switch (action) {
-            case "ready": case "unready":
-                if (s.Status != "waiting") error = "The match has already started.";
-                else me.Ready = action == "ready";
-                break;
-            case "start":
-                if (s.Host != me.Id) return Results.Forbid();
-                if (s.Status != "waiting" || s.Players.Count < 2 || s.Players.Any(p => !p.Ready)) error = "At least two players must be ready before starting.";
-                else { s.Status = "playing"; s.Deadline = now.AddMinutes(s.Minutes); }
-                break;
-            case "cancel":
-                if (s.Host != me.Id) return Results.Forbid();
-                s.Status = "cancelled";
-                s.Deadline = null; s.NextRoundAt = null;
-                break;
-            case "replay":
-                if (s.Host != me.Id) return Results.Forbid();
-                if (s.Status != "finished" || replayGame != s.Game) { error = "Only the current finished match can return to the lobby."; break; }
-                s.Game++;
-                s.Status = "waiting"; s.WaitingSince = now;
-                s.Deadline = null; s.NextRoundAt = null; s.Round = 0; s.Rounds.Clear();
-                foreach (var player in s.Players) { player.Answers.Clear(); player.Ready = player.Id == s.Host; }
-                // Replay the selected bank set with fresh question and option ordering.
-                s.Questions = s.Questions.Select(q => {
-                    var order = Enumerable.Range(0, 4).OrderBy(_ => RandomNumberGenerator.GetInt32(int.MaxValue)).ToArray();
-                    return new LobbyQuestion(q.Category, new Question(q.Question.Prompt, order.Select(i => q.Question.Options[i]).ToArray(), Array.IndexOf(order, q.Question.Answer), q.Question.Explanation, q.Question.Steps));
-                }).OrderBy(_ => RandomNumberGenerator.GetInt32(int.MaxValue)).ToList();
-                break;
-            case "leave":
-                if (s.Status == "playing") error = "A running match keeps your place. You may close the page and rejoin with this code.";
-                else if (s.Host == me.Id) s.Status = "cancelled"; // host leaving = cancel
-                else s.Players.Remove(me);
-                break;
-            case "answer":
-                if (s.Status != "playing" || s.NextRoundAt != null || answer == null || answer.Game != s.Game || answer.Index < 0 || answer.Index >= s.Questions.Count || answer.Choice is < 0 or > 3) { error = "This question is no longer accepting answers."; break; }
-                var expected = s.Mode == "speed" ? s.Round : me.Answers.Count;
-                if (answer.Index != expected || me.Answers.Any(a => a.Index == answer.Index)) { error = "This answer was already submitted or belongs to another question."; break; }
-                var correct = s.Questions[answer.Index].Question.Answer == answer.Choice;
-                me.Answers.Add(new(answer.Index, answer.Choice, correct));
-                if (s.Mode == "speed") {
-                    if (correct) EndRound(s, me.Id, "First correct answer", now);
-                    else if (s.Players.All(p => p.Answers.Any(a => a.Index == s.Round))) EndRound(s, null, "Everyone answered incorrectly", now);
-                } else if (s.Players.All(p => p.Answers.Count == s.Questions.Count)) s.Status = "finished";
-                break;
-        }
-        var updated = JsonSerializer.Serialize(s);
-        if (updated != lobby.Data) { lobby.Data = updated; await db.SaveChangesAsync(); }
-        await transaction.CommitAsync();
-        if (error != null) return Results.Conflict(new { error });
-        c.Response.Headers.CacheControl = "no-store";
-        return Results.Ok(View(code, s, me, now));
+
+    private static string UserId(HttpContext c) => c.User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+    private static string UserName(HttpContext c) => c.User.Identity!.Name!;
+
+    private static IResult Respond(HttpContext c, ServiceResult<LobbyView> result) {
+        if (result.IsSuccess) c.Response.Headers.CacheControl = "no-store";
+        return result.ToHttp();
     }
+
     public static void Tick(LobbyState s, DateTime now) {
         if (s.Status != "playing") return;
         if (s.Mode == "test") { if (now >= s.Deadline) s.Status = "finished"; return; }
@@ -164,25 +87,9 @@ public static class Multiplayer {
             else return;
         }
     }
-    private static void EndRound(LobbyState s, string? winner, string reason, DateTime at) {
-        s.Rounds.Add(new(s.Round, winner, reason)); s.NextRoundAt = at.AddSeconds(5);
-    }
-    private static object View(string code, LobbyState s, LobbyPlayer me, DateTime now) {
-        var index = s.Mode == "speed" ? s.Round : me.Answers.Count;
-        var question = s.Status == "playing" && index < s.Questions.Count ? s.Questions[index] : null;
-        var scores = s.Players.Select(p => new { p.Id, p.Name, p.Ready, answered = p.Answers.Count, score = s.Mode == "speed" ? s.Rounds.Count(r => r.Winner == p.Id) : p.Answers.Count(a => a.Correct) }).ToArray();
-        var maximum = scores.Max(p => p.score);
-        var winners = s.Status == "finished" && maximum > 0 ? scores.Where(p => p.score == maximum).Select(p => p.Id).ToArray() : [];
-        var reviewIndex = s.Mode == "speed" && s.NextRoundAt != null ? s.Round : -1;
-        return new {
-            code, s.Game, s.Status, s.Mode, s.Category, s.Level, s.Minutes, count = s.Questions.Count, s.Host,
-            me = me.Id, ready = me.Ready, serverTime = now, s.Deadline, s.NextRoundAt,
-            players = scores.Select(p => new { p.Id, p.Name, p.Ready, p.answered, score = s.Mode == "speed" || s.Status == "finished" ? (int?)p.score : null }),
-            winners, index, answered = me.Answers.Any(a => a.Index == index),
-            question = question == null ? null : new { question.Category, question.Question.Prompt, question.Question.Options },
-            breakdown = s.Questions.GroupBy(q => q.Category).Select(g => new { category = g.Key, count = g.Count() }),
-            review = reviewIndex < 0 ? null : new { question = s.Questions[reviewIndex], result = s.Rounds.Last() },
-            results = s.Status != "finished" ? null : s.Questions.Select((q, i) => new { index = i, q.Category, q.Question, choice = me.Answers.SingleOrDefault(a => a.Index == i)?.Choice, roundWinner = s.Rounds.SingleOrDefault(r => r.Index == i)?.Winner })
-        };
+
+    public static void EndRound(LobbyState s, string? winner, string reason, DateTime at) {
+        s.Rounds.Add(new(s.Round, winner, reason));
+        s.NextRoundAt = at.AddSeconds(5);
     }
 }

@@ -1,0 +1,9 @@
+@if (!string.IsNullOrEmpty(Message)) {
+    <div id="notice" role="status" aria-live="polite" class="mb-6 rounded-xl p-4 bg-amber-50 text-amber-900">@Message</div>
+}
+
+@code {
+    #region Properties
+    [Parameter] public string Message { get; set; } = "";
+    #endregion
+}

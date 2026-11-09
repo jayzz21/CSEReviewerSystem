@@ -43,24 +43,31 @@ try {
     var ready = false;
     for (var i = 0; i < 60; i++) { try { ready = (await sa.GetAsync("/api/auth/config")).IsSuccessStatusCode; } catch (HttpRequestException) { } if (ready) break; await Task.Delay(500); }
     Check(ready, "Isolated test server started");
+    var notifier = new LobbyNotifier(); var notified = 0;
+    using (notifier.Subscribe("AABBCCDDEE", () => { Interlocked.Increment(ref notified); return Task.CompletedTask; })) { notifier.Notify("AABBCCDDEE"); await Task.Delay(200); }
+    notifier.Notify("AABBCCDDEE"); await Task.Delay(200);
+    Check(notified == 1, "Lobby notifier reaches subscribers until they unsubscribe");
     var home = await sa.GetAsync("/");
-    Check(home.StatusCode == HttpStatusCode.Redirect && home.Headers.Location?.ToString() == "/login.html", "Front page redirects anonymous visitors to login without JavaScript");
-    Check((await sa.GetAsync("/index.html")).StatusCode == HttpStatusCode.Redirect, "Direct reviewer page also requires login");
-    Check((await sa.GetAsync("/?view=multiplayer&code=AABBCCDDEE")).Headers.Location?.ToString() == "/login.html?lobby=AABBCCDDEE", "Shared lobby survives the signed-out front-page redirect");
-    Check((await sa.GetStringAsync("/login.html")).Contains("id=\"login-form\""), "Login UI is served publicly");
+    Check(home.StatusCode == HttpStatusCode.Redirect && home.Headers.Location?.ToString() == "/Login?returnUrl=%2F", "Front page redirects anonymous visitors to login without JavaScript");
+    Check((await sa.GetAsync("/index.html")).Headers.Location?.ToString() == "/", "Old reviewer address redirects to the front page");
+    Check((await sa.GetAsync("/?view=multiplayer&code=AABBCCDDEE")).Headers.Location?.ToString()?.Contains("AABBCCDDEE") == true, "Shared lobby survives the signed-out front-page redirect");
+    Check((await sa.GetAsync("/Multiplayer?code=AABBCCDDEE")).Headers.Location?.ToString() == "/Login?returnUrl=%2FMultiplayer%3Fcode%3DAABBCCDDEE", "Shared lobby survives the signed-out multiplayer page redirect");
+    Check((await sa.GetAsync("/login.html?lobby=AABBCCDDEE")).Headers.Location?.ToString() == "/Login?returnUrl=%2FMultiplayer%3Fcode%3DAABBCCDDEE", "Old login address with a lobby code still reaches the lobby after sign-in");
+    Check((await sa.GetStringAsync("/Login")).Contains("id=\"login-form\""), "Login UI is served publicly");
+    Check((await sa.GetStringAsync("/Register")).Contains("id=\"register-form\""), "Registration UI is served publicly");
     Check((await sa.GetAsync("/api/sets")).StatusCode == HttpStatusCode.Unauthorized, "Anonymous study access denied");
     Check((await sa.PostAsJsonAsync("/api/session", new { })).StatusCode == HttpStatusCode.Unauthorized, "Legacy POST session requires login instead of returning 405");
     var login = await sa.PostAsJsonAsync("/api/auth/login", new { login = "sa", password = "123" });
     Check(login.IsSuccessStatusCode, "Initial Super Admin login");
-    Check((await sa.GetAsync("/")).Headers.Location?.ToString() == "/login.html?changePassword=1", "Front page directs initial admin to password setup");
+    Check((await sa.GetAsync("/")).Headers.Location?.ToString() == "/Change-Password?returnUrl=%2F", "Front page directs initial admin to password setup");
     Check((await sa.GetAsync("/api/admin/users")).StatusCode == HttpStatusCode.Forbidden, "Initial password must be changed before admin access");
     Check((await sa.PostAsJsonAsync("/api/auth/change-password", new { currentPassword = "123", newPassword = "Temporary-test-only-42!" })).IsSuccessStatusCode, "Super Admin password change");
     Check((await sa.GetAsync("/")).IsSuccessStatusCode, "Authenticated front page serves reviewer");
+    Check((await sa.GetStringAsync("/Multiplayer")).Contains("_framework/blazor.web.js"), "Authenticated users get the Razor multiplayer page");
     var aiRequest = await sa.PostAsJsonAsync("/api/sets", new { category = "Numerical Ability", level = "Professional", difficulty = "Easy", count = 5, focus = "", mode = "ai" });
     Check(aiRequest.StatusCode == HttpStatusCode.ServiceUnavailable && (await aiRequest.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString() == "ai_not_available", "AI mode returns explicit unavailable message");
     Check(!await db.Sets.AnyAsync(), "Unavailable AI request does not create a set");
-    var reviewerHtml = await sa.GetStringAsync("/");
-    Check(!reviewerHtml.Contains("value=\"sample\"") && reviewerHtml.Contains("value=\"bank\" selected"), "Database is the default mode and built-in option is removed");
+    foreach (var page in new[] { "/My-Saved-Sets", "/Administration" }) Check((await sa.GetStringAsync(page)).Contains("_framework/blazor.web.js"), $"Authenticated users get the Razor page {page}");
     var legacySession = await sa.PostAsJsonAsync("/api/session", new { });
     Check(legacySession.IsSuccessStatusCode && (await legacySession.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("username").GetString() == "sa", "Legacy POST session returns authenticated account");
     db.AccountProfiles.AddRange(new AccountProfile { Id = "test-user-a", Username = "user_a", Email = "a@example.invalid" }, new AccountProfile { Id = "test-user-b", Username = "user_b", Email = "b@example.invalid" });

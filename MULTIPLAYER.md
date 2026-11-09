@@ -1,6 +1,6 @@
 # Multiplayer lobbies
 
-Open **Multiplayer lobbies** from the reviewer sidebar, or visit `/?view=multiplayer`. Only the main content changes; the sidebar, header, account controls, and dark/light theme remain in place. Existing `/multiplayer.html?code=...` links redirect into this layout.
+Open **Multiplayer lobbies** from the reviewer sidebar, or visit `/Multiplayer`. This is a Blazor (Razor) page with its own header and a dark/light theme toggle; use **Back to reviewer** to return to the main app. Existing `/multiplayer.html?code=...` and `/?view=multiplayer&code=...` links redirect to `/Multiplayer?code=...`.
 
 ## Playing
 
@@ -19,13 +19,13 @@ Questions and choices are shuffled once per match and shared identically with ev
 
 Keep the lobby link/code to reopen a match. Questions, player answers, scores, and round outcomes are stored in the `Lobbies` table. Disconnecting does not pause the server deadline. The host may cancel a match, but guests cannot. Players can leave a waiting lobby; leaving as host closes it. Waiting lobbies expire 24 hours after creation or the latest return to the waiting room. There is no automatic host transfer.
 
-Clients poll every 1.5 seconds while the lobby view is open, including after a match ends, so everyone sees the next waiting room or closure. Timers display locally using server time; the server validates all submissions and computes winners. Database row locks serialize simultaneous answers, including across app processes. A sleeping/restarting host does not reset the stored deadlines: the next request advances expired rounds. This is intended for small friend groups, not large tournaments.
+The lobby page is live: when anyone joins, readies up, answers, or the host starts, replays or closes the lobby, the server pushes the change to every open lobby page over Blazor's built-in connection (no polling). A one-second page clock redraws the countdown and refreshes the lobby when a deadline passes, so a finished match or the next speed round appears without anyone clicking. As a safety net the page also refreshes itself every 30 seconds, in case the app runs on more than one server instance (the push only reaches players on the same instance). The server validates all submissions and computes winners. Database row locks serialize simultaneous answers, including across app processes. A sleeping/restarting host does not reset the stored deadlines: the next request advances expired rounds. This is intended for small friend groups, not large tournaments.
 
 ## Deploying this update
 
 1. Run **`supabase-multiplayer-setup.sql`** in Supabase SQL Editor. It adds the `Lobbies` table and enables RLS without modifying existing accounts/questions. The app also performs the same additive setup at startup.
 2. Commit/push all multiplayer source changes, the SQL file, and rebuilt `app.css` to the repository connected to Render.
-3. Deploy the latest commit in Render. The lobby page is then at `https://csereviewersystem.onrender.com/multiplayer.html`.
+3. Deploy the latest commit in Render. The lobby page is then at `https://csereviewersystem.onrender.com/Multiplayer`.
 4. Test with two separate accounts/devices. Tabs sharing the same browser profile use the same signed-in account and count as one player.
 
 No new API key, Supabase Realtime subscription, paid hosting plan, or AI service is required. The existing backend database connection must have permissions to create/access the Lobbies table. Browser users access it through the .NET API only.

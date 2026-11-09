@@ -1,0 +1,14 @@
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="@_titleId">
+    <div class="panel p-6 w-full max-w-lg max-h-full overflow-y-auto">
+        <h2 id="@_titleId" class="text-xl font-bold">@Title</h2>
+        @ChildContent
+    </div>
+</div>
+
+@code {
+    #region Properties
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    private readonly string _titleId = "dialog-title-" + Guid.NewGuid().ToString("N")[..8];
+    #endregion
+}

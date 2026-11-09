@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @source "../wwwroot";
+@source "../Components";
 @theme {
   --font-sans: "Segoe UI", Arial, sans-serif;
 

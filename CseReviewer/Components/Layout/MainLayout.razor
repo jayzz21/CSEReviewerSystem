@@ -1,0 +1,97 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject CurrentUserAccessor Users
+@inject PracticeService Practice
+@inject NavigationManager Navigation
+
+<div class="min-h-screen lg:grid lg:grid-cols-[250px_1fr]">
+    <aside class="bg-white border-r border-slate-200 p-6 lg:sticky lg:top-0 lg:h-screen flex flex-col">
+        <a href="/" class="flex items-center gap-3 text-2xl font-bold tracking-tight">
+            <span class="bg-teal-800 text-white rounded-xl px-3 py-1">h.</span>
+            husay<span class="text-teal-600">.</span>
+        </a>
+        <p class="text-xs tracking-widest text-slate-400 mt-8 mb-3">YOUR STUDY SPACE</p>
+        <nav class="flex lg:flex-col gap-2">
+            <a href="/" class="nav @ActiveClass(IsCreatePage)">✦ &nbsp; Create a reviewer</a>
+            <a href="/My-Saved-Sets" class="nav @ActiveClass(IsPage("/My-Saved-Sets"))">▤ &nbsp; My saved sets <span class="ml-auto">@(_savedCount > 0 ? _savedCount.ToString() : "")</span></a>
+            <a href="/Multiplayer" class="nav @ActiveClass(IsPage("/Multiplayer"))">Multiplayer lobbies</a>
+            @if (_user?.IsAdmin == true) {
+                <a href="/Administration" class="nav @ActiveClass(IsPage("/Administration"))">Administration</a>
+            }
+            <button type="button" class="nav" @onclick="SignOut">Sign out</button>
+        </nav>
+        <div class="mt-8 lg:mt-auto rounded-2xl bg-teal-50 p-5">
+            <p class="font-semibold text-teal-900">Small steps. Big progress.</p>
+            <p class="text-sm leading-6 mt-2 text-teal-800">A little practice today brings you closer to public service.</p>
+            <span class="text-xs mt-4 block text-teal-700">PARA SA PANGARAP. PARA SA BAYAN.</span>
+        </div>
+        <p class="text-xs text-slate-400 mt-5"><span>@_user?.Name</span></p>
+    </aside>
+    <main class="min-w-0">
+        <header class="border-b border-slate-200 bg-white px-6 lg:px-12 py-5 flex justify-between items-center">
+            <span class="text-sm text-slate-500">Your path to civil service</span>
+            <div class="flex items-center gap-3">
+                <span class="text-xs font-semibold bg-teal-50 text-teal-800 px-3 py-2 rounded-full">PH Civil Service Exam</span>
+                <button type="button" id="theme-toggle" class="theme-toggle" aria-label="Toggle dark mode" title="Toggle dark mode">🌙</button>
+            </div>
+        </header>
+        <div class="max-w-6xl mx-auto p-6 lg:p-12">
+            @Body
+            <footer class="mt-12 pt-6 border-t border-slate-200 text-xs text-slate-400 flex flex-wrap justify-between gap-3">
+                <span>Husay · A little better, every day.</span>
+                <a href="https://www.csc.gov.ph/more-than-400k-to-take-26-march-career-service-exam" target="_blank" rel="noopener" class="underline">CSC coverage reference ↗</a>
+            </footer>
+        </div>
+    </main>
+</div>
+
+@code {
+    #region Properties
+    private CurrentUser? _user;
+    private int _savedCount;
+    private string _currentPath = "/";
+    private bool IsCreatePage => IsPage("/") || IsPage("/Practice");
+    #endregion
+
+    #region Lifecycle
+    protected override async Task OnInitializedAsync() {
+        _user = await Users.Get();
+        _currentPath = CurrentPath();
+        Navigation.LocationChanged += OnLocationChanged;
+        await LoadSavedCount();
+    }
+
+    public void Dispose() {
+        Navigation.LocationChanged -= OnLocationChanged;
+    }
+    #endregion
+
+    #region Methods
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e) {
+        _ = InvokeAsync(async () => {
+            _currentPath = CurrentPath();
+            await LoadSavedCount();
+            StateHasChanged();
+        });
+    }
+
+    private async Task LoadSavedCount() {
+        if (_user == null) return;
+        _savedCount = (await Practice.GetSavedSets(_user.Id)).Count;
+    }
+
+    private string CurrentPath() {
+        return "/" + Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].TrimEnd('/');
+    }
+
+    private bool IsPage(string path) {
+        return path == "/" ? _currentPath == "/" : _currentPath.StartsWith(path, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string ActiveClass(bool isActive) => isActive ? "active" : "";
+
+    private void SignOut() {
+        Navigation.NavigateTo("/Logout", forceLoad: true);
+    }
+    #endregion
+}

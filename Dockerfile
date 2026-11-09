@@ -4,6 +4,7 @@ COPY package.json package-lock.json ./
 RUN npm ci
 COPY CseReviewer/Styles/ CseReviewer/Styles/
 COPY CseReviewer/wwwroot/ CseReviewer/wwwroot/
+COPY CseReviewer/Components/ CseReviewer/Components/
 RUN npm run css
 
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build

@@ -1,0 +1,70 @@
+@page "/Login"
+@page "/Register"
+@layout AuthLayout
+@inject NavigationManager Navigation
+
+<PageTitle>Sign in · Husay</PageTitle>
+
+@if (IsRegisterPage) {
+    <h2 id="auth-title" class="text-2xl font-bold">Create your study account</h2>
+    <p id="auth-message" class="mt-4 text-sm" role="status" aria-live="polite">@Message</p>
+    <form id="register-form" method="post" action="/Account/Register" class="space-y-4 mt-6">
+        <AntiforgeryToken />
+        <label class="block">Username
+            <input id="register-name" name="username" autocomplete="username" pattern="[A-Za-z0-9_]{3,30}" minlength="3" maxlength="30" required>
+            <span class="text-xs text-slate-500">3–30 letters, numbers or underscores.</span>
+        </label>
+        <PasswordField Id="register-password" Name="password" Label="Password" Autocomplete="new-password" MinLength="12" Hint="At least 12 characters." />
+        <button class="primary" type="submit">Create account</button>
+    </form>
+    <div class="space-y-4 mt-6">
+        <a href="/Login@(ReturnUrlQuery)" class="text-teal-800 underline">Already registered? Sign in</a>
+    </div>
+} else {
+    <h2 id="auth-title" class="text-2xl font-bold">Welcome back</h2>
+    <p id="auth-message" class="mt-4 text-sm" role="status" aria-live="polite">@Message</p>
+    <form id="login-form" method="post" action="/Account/Login" class="space-y-4 mt-6">
+        <AntiforgeryToken />
+        <input type="hidden" name="returnUrl" value="@SafeReturnUrl">
+        <label class="block">Username
+            <input id="login-name" name="login" autocomplete="username" required maxlength="254">
+        </label>
+        <PasswordField Id="login-password" Name="password" Label="Password" />
+        <button class="primary" type="submit">Sign in →</button>
+    </form>
+    <div class="space-y-4 mt-6">
+        <a href="/Register" class="text-teal-800 underline">New here? Create an account</a>
+    </div>
+}
+
+@code {
+    #region Properties
+    [SupplyParameterFromQuery(Name = "error")] public string? ErrorCode { get; set; }
+    [SupplyParameterFromQuery(Name = "registered")] public string? Registered { get; set; }
+    [SupplyParameterFromQuery(Name = "returnUrl")] public string? ReturnUrl { get; set; }
+    private bool IsRegisterPage => Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("Register", StringComparison.OrdinalIgnoreCase);
+    private string SafeReturnUrl {
+        get {
+            var isLocalPath = !string.IsNullOrEmpty(ReturnUrl) && ReturnUrl.StartsWith('/') && !ReturnUrl.StartsWith("//") && !ReturnUrl.StartsWith("/\\");
+            return isLocalPath ? ReturnUrl! : "";
+        }
+    }
+    private string ReturnUrlQuery => SafeReturnUrl.Length == 0 ? "" : "?returnUrl=" + Uri.EscapeDataString(SafeReturnUrl);
+    private string Message {
+        get {
+            if (Registered == "1") return "Account created. Sign in with your username and password.";
+            if (ErrorCode == "toomany") return "Too many attempts. Wait one minute and try again.";
+            if (IsRegisterPage) return ErrorCode switch {
+                "taken" => "That username is already taken.",
+                "invalid" => "Use a 3–30 character username (letters, numbers, underscores) and a password of 12–128 characters.",
+                _ => ""
+            };
+            return ErrorCode switch {
+                "invalid" => "Invalid username or password.",
+                "legacy" => "Invalid username or password. For an old email account, ask the Super Admin to set a password.",
+                _ => ""
+            };
+        }
+    }
+    #endregion
+}

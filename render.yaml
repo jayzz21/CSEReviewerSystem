@@ -4,7 +4,7 @@ services:
     runtime: docker
     plan: free
     dockerfilePath: ./Dockerfile
-    healthCheckPath: /login.html
+    healthCheckPath: /Login
     envVars:
       - key: ASPNETCORE_ENVIRONMENT
         value: Production
