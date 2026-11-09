@@ -1,112 +1,126 @@
 @page "/Multiplayer"
 @attribute [Authorize]
 @implements IDisposable
-@using System.Security.Claims
 @inject LobbyService Lobbies
 @inject LobbyNotifier Notifier
-@inject AuthenticationStateProvider AuthState
+@inject CurrentUserAccessor Users
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
 
-<p class="eyebrow mt-6">PRACTICE TOGETHER</p>
-<h1 class="text-3xl font-bold mt-3">Multiplayer challenge</h1>
-<p role="status" aria-live="polite" class="mt-4">@_message</p>
+<PageTitle>Multiplayer · Husay</PageTitle>
+
+<MudText Typo="Typo.overline" Color="Color.Primary">Practice together</MudText>
+<MudText Typo="Typo.h4" Class="mt-1">Multiplayer challenge</MudText>
 
 @if (_isLoading) {
-    <p class="mt-6">Loading…</p>
+    <MudProgressLinear Indeterminate="true" Class="@AppTheme.SectionGap" />
 } else if (_view == null) {
-    <div class="grid md:grid-cols-2 gap-7 mt-6">
-        <section class="panel p-6">
-            <h2 class="text-xl font-bold">Create a lobby</h2>
-            <form class="space-y-4 mt-4" @onsubmit="CreateNewLobby">
-                <label class="block">Exam level
-                    <select @bind="_level" @bind:after="ResetCategory">
-                        <option>Professional</option>
-                        <option>Subprofessional</option>
-                    </select>
-                </label>
-                <label class="block">Category
-                    <select @bind="_category">
-                        @foreach (var category in GetCategories()) {
-                            <option>@category</option>
-                        }
-                    </select>
-                </label>
-                <label class="block">Game mode
-                    <select @bind="_mode">
-                        <option value="test">Timed test · most correct wins</option>
-                        <option value="speed">Speed rounds · first correct wins</option>
-                    </select>
-                </label>
-                <label class="block">Number of questions
-                    <input type="number" min="30" max="180" step="1" required @bind="_count" @bind:event="oninput">
-                </label>
-                <label class="block">@(_mode == "speed" ? "Minutes per question" : "Minutes for the entire test")
-                    <input type="number" min="1" step="1" required @bind="_minutes" @bind:event="oninput">
-                    <span class="text-sm muted">Enter any positive whole number of minutes, such as 10, 30, or 120.</span>
-                </label>
-                <p class="text-sm text-slate-500">@RulesText</p>
-                <button class="primary" type="submit" disabled="@_isProcessing">Create lobby</button>
-            </form>
-        </section>
-        <section class="panel p-6">
-            <h2 class="text-xl font-bold">Join your friends</h2>
-            <form class="space-y-4 mt-4" @onsubmit="JoinLobbyFromForm">
-                <label class="block">Lobby code
-                    <input maxlength="10" pattern="[a-fA-F0-9]{10}" required autocomplete="off" @bind="_joinCode" @bind:event="oninput">
-                </label>
-                <button class="primary" type="submit" disabled="@_isProcessing">Join lobby</button>
-            </form>
-            <p class="mt-6 text-slate-500">2–20 signed-in players. Everyone receives the same questions. Only the host starts the match once all players are ready.</p>
-            <p class="mt-4 text-sm text-slate-500">Need a break? Keep your lobby link to reconnect. The server clock continues if you disconnect.</p>
-        </section>
-    </div>
+    <MudGrid Class="mt-2">
+        <MudItem xs="12" md="6">
+            <MudPaper Class="@AppTheme.CardPadding">
+                <MudText Typo="Typo.h6">Create a lobby</MudText>
+                <form @onsubmit="CreateNewLobby">
+                    <MudStack Spacing="3" Class="mt-4">
+                        <MudSelect T="string" Label="Exam level" Variant="Variant.Outlined" Value="@_level" ValueChanged="@ChangeLevel">
+                            <MudSelectItem T="string" Value="@("Professional")" />
+                            <MudSelectItem T="string" Value="@("Subprofessional")" />
+                        </MudSelect>
+                        <MudSelect T="string" Label="Category" Variant="Variant.Outlined" @bind-Value="_category">
+                            @foreach (var category in GetCategories()) {
+                                <MudSelectItem T="string" Value="@category" />
+                            }
+                        </MudSelect>
+                        <MudSelect T="string" Label="Game mode" Variant="Variant.Outlined" @bind-Value="_mode" ToStringFunc="@ModeLabel">
+                            <MudSelectItem T="string" Value="@("test")" />
+                            <MudSelectItem T="string" Value="@("speed")" />
+                        </MudSelect>
+                        <MudNumericField T="int" Label="Number of questions" Variant="Variant.Outlined" Min="30" Max="180" Class="text-align-right" @bind-Value="_count" Immediate="true" />
+                        <MudNumericField T="int" Label="@(_mode == "speed" ? "Minutes per question" : "Minutes for the entire test")" Variant="Variant.Outlined" Min="1" Class="text-align-right"
+                                         HelperText="Enter any positive whole number of minutes, such as 10, 30, or 120." @bind-Value="_minutes" Immediate="true" />
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@RulesText</MudText>
+                        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="@_isProcessing" StartIcon="@(_isProcessing ? null : Icons.Material.Filled.Add)">
+                            @if (_isProcessing) {
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                            }
+                            Create lobby
+                        </MudButton>
+                    </MudStack>
+                </form>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudPaper Class="@AppTheme.CardPadding">
+                <MudText Typo="Typo.h6">Join your friends</MudText>
+                <form @onsubmit="JoinLobbyFromForm">
+                    <MudStack Spacing="3" Class="mt-4">
+                        <MudTextField T="string" Label="Lobby code" Variant="Variant.Outlined" MaxLength="10" @bind-Value="_joinCode" Immediate="true" />
+                        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Disabled="@_isProcessing" StartIcon="@(_isProcessing ? null : Icons.Material.Filled.Login)">
+                            @if (_isProcessing) {
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                            }
+                            Join lobby
+                        </MudButton>
+                    </MudStack>
+                </form>
+                <MudText Color="Color.Secondary" Class="mt-6">2–20 signed-in players. Everyone receives the same questions. Only the host starts the match once all players are ready.</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-3">Need a break? Keep your lobby link to reconnect. The server clock continues if you disconnect.</MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
 } else {
-    <section class="mt-6">
-        <div class="panel p-6">
-            <div class="flex flex-wrap justify-between gap-3">
-                <h2 class="text-xl font-bold">Lobby <span>@_view.Code</span></h2>
-                <strong role="timer">@TimerText</strong>
-            </div>
-            <p class="mt-3">@SettingsText</p>
-            <p class="mt-3 text-sm">@BreakdownText</p>
-            <div class="flex flex-wrap gap-3 mt-4">
-                <input readonly aria-label="Shareable lobby link" value="@ShareLink">
-                <button type="button" class="secondary" @onclick="CopyLink">Copy link</button>
-            </div>
-            <div class="flex flex-wrap gap-3 mt-4">
-                @if (IsWaiting) {
-                    <button type="button" class="secondary" disabled="@_isProcessing" @onclick="ToggleReady">@(_view.Ready ? "Not ready" : "I am ready")</button>
-                }
-                @if (IsWaiting && IsHost) {
-                    <button type="button" class="primary" disabled="@(_isProcessing || !CanStart)" @onclick="StartMatch">Start match</button>
-                }
-                @if (_view.Status == "finished" && !_waitingForHost) {
-                    <button type="button" class="primary" disabled="@_isProcessing" @onclick="PlayAgain">@(IsHost ? "🎮 New game · back to lobby" : "🔄 Back to lobby")</button>
-                }
-                @if (_view.Status != "playing" && _view.Status != "cancelled") {
-                    <button type="button" class="secondary" disabled="@_isProcessing" @onclick="LeaveLobby">@LeaveButtonText</button>
-                }
-                @if (IsHost && _view.Status == "waiting") {
-                    <button type="button" class="secondary" disabled="@_isProcessing" @onclick="CancelLobby">Cancel lobby</button>
-                }
-            </div>
-            <div class="mt-5 space-y-2">
-                @foreach (var player in _view.Players) {
-                    <p><strong>@player.Name</strong>@(player.Id == _view.Host ? " · Host" : "")@(player.Id == _view.Me ? " · You" : "") — @PlayerStatus(player)</p>
-                }
-            </div>
-        </div>
-        <div class="panel p-6 mt-6">
-            <LobbyGameArea View="_view"
-                           WaitingForHost="_waitingForHost"
-                           SelectedChoice="_selectedChoice"
-                           IsProcessing="_isProcessing"
-                           OnChoiceSelected="SelectChoice"
-                           OnSubmitAnswer="SubmitAnswer"
-                           OnCloseLobby="CloseRoom" />
-        </div>
-    </section>
+    <MudPaper Class="@($"{AppTheme.CardPadding} {AppTheme.SectionGap}")">
+        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+            <MudText Typo="Typo.h6">Lobby @_view.Code</MudText>
+            <MudChip T="string" Color="@(_view.Status == "playing" ? Color.Primary : Color.Default)" role="timer">@TimerText</MudChip>
+        </MudStack>
+        <MudText Class="mt-3">@SettingsText</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">@BreakdownText</MudText>
+        <MudTextField T="string" Label="Shareable lobby link" Variant="Variant.Outlined" ReadOnly="true" Value="@ShareLink" Class="mt-4"
+                      Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.ContentCopy" OnAdornmentClick="CopyLink" AdornmentAriaLabel="Copy link" />
+        <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="2" Class="mt-4">
+            @if (IsWaiting) {
+                <MudButton Variant="Variant.Outlined" Disabled="@_isProcessing" OnClick="ToggleReady" StartIcon="@(_view.Ready ? Icons.Material.Filled.Close : Icons.Material.Filled.Check)">@(_view.Ready ? "Not ready" : "I am ready")</MudButton>
+            }
+            @if (IsWaiting && IsHost) {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_isProcessing || !CanStart)" OnClick="StartMatch" StartIcon="@Icons.Material.Filled.PlayArrow">Start match</MudButton>
+            }
+            @if (_view.Status == "finished" && !_waitingForHost) {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@_isProcessing" OnClick="PlayAgain" StartIcon="@Icons.Material.Filled.Replay">@(IsHost ? "New game · back to lobby" : "Back to lobby")</MudButton>
+            }
+            @if (_view.Status != "playing" && _view.Status != "cancelled") {
+                <MudButton Variant="Variant.Outlined" Disabled="@_isProcessing" OnClick="LeaveLobby" StartIcon="@Icons.Material.Filled.Logout">@LeaveButtonText</MudButton>
+            }
+            @if (IsHost && _view.Status == "waiting") {
+                <MudButton Variant="Variant.Outlined" Color="Color.Error" Disabled="@_isProcessing" OnClick="CancelLobby" StartIcon="@Icons.Material.Filled.Cancel">Cancel lobby</MudButton>
+            }
+        </MudStack>
+        <MudStack Spacing="2" Class="mt-5">
+            @foreach (var player in _view.Players) {
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
+                    <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" />
+                    <MudText><strong>@player.Name</strong></MudText>
+                    @if (player.Id == _view.Host) {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined">Host</MudChip>
+                    }
+                    @if (player.Id == _view.Me) {
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">You</MudChip>
+                    }
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">@PlayerStatus(player)</MudText>
+                </MudStack>
+            }
+        </MudStack>
+    </MudPaper>
+    <MudPaper Class="@($"{AppTheme.CardPadding} {AppTheme.SectionGap}")">
+        <LobbyGameArea View="_view"
+                       WaitingForHost="_waitingForHost"
+                       SelectedChoice="_selectedChoice"
+                       IsProcessing="_isProcessing"
+                       OnChoiceSelected="SelectChoice"
+                       OnSubmitAnswer="SubmitAnswer"
+                       OnCloseLobby="CloseRoom" />
+    </MudPaper>
 }
 
 @code {
@@ -124,7 +138,6 @@
     private int _count = 30;
     private int _minutes = 3;
     private string _joinCode = "";
-    private string _message = "";
     private bool _isLoading = true;
     private bool _isProcessing;
     private bool _isDisposed;
@@ -148,7 +161,9 @@
     #region Lifecycle
     protected override async Task OnInitializedAsync() {
         try {
-            await LoadCurrentUser();
+            var user = await Users.Get();
+            _userId = user.Id;
+            _userName = user.Name;
             if (!string.IsNullOrWhiteSpace(CodeFromLink)) await RunAction(() => JoinLobbyByCode(CodeFromLink.Trim().ToUpperInvariant()));
         } finally {
             _isLoading = false;
@@ -186,6 +201,8 @@
         return $"{player.Answered} answered{(player.Score == null ? "" : $" · {player.Score} points")}";
     }
 
+    private static string ModeLabel(string mode) => mode == "speed" ? "Speed rounds · first correct wins" : "Timed test · most correct wins";
+
     private List<string> GetCategories() => [
         "All 4 Subjects (Final Mock Exam)",
         "Numerical Ability",
@@ -196,41 +213,45 @@
     #endregion
 
     #region Setup
-    private async Task LoadCurrentUser() {
-        var state = await AuthState.GetAuthenticationStateAsync();
-        _userId = state.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
-        _userName = state.User.Identity?.Name ?? "";
+    private void ChangeLevel(string level) {
+        _level = level;
+        _category = GetCategories()[0];
     }
 
-    private void ResetCategory() {
-        _category = GetCategories()[0];
+    private void ShowError(string message) {
+        Extension.ShowAlert(message, Variant.Filled, Snackbar, Severity.Error);
     }
 
     private async Task RunAction(Func<Task> work) {
         if (_isProcessing) return;
         _isProcessing = true;
-        _message = "";
         try { await work(); }
-        catch (Exception ex) { _message = ex.Message; }
+        catch (Exception ex) { ShowError(ex.Message); }
         finally { _isProcessing = false; }
     }
     #endregion
 
     #region Opening and closing a lobby
     private Task CreateNewLobby() => RunAction(async () => {
+        if (_count < 30 || _count > 180) { Extension.ShowAlert("Choose 30 to 180 questions.", Variant.Filled, Snackbar, Severity.Warning); return; }
+        if (_minutes < 1) { Extension.ShowAlert("Enter a positive whole number of minutes.", Variant.Filled, Snackbar, Severity.Warning); return; }
         var created = await Lobbies.Create(_userId, _userName, new CreateLobby(_category, _level, _mode, _count, _minutes));
-        if (!created.IsSuccess) { _message = created.Error; return; }
+        if (!created.IsSuccess) { ShowError(created.Error); return; }
         await OpenRoom(await Lobbies.Read(created.Value!, _userId, _userName));
     });
 
-    private Task JoinLobbyFromForm() => RunAction(() => JoinLobbyByCode(_joinCode.Trim().ToUpperInvariant()));
+    private Task JoinLobbyFromForm() => RunAction(async () => {
+        var code = (_joinCode ?? "").Trim().ToUpperInvariant();
+        if (code.Length != 10 || !code.All(Uri.IsHexDigit)) { Extension.ShowAlert("Enter the ten-character lobby code (letters A-F and numbers).", Variant.Filled, Snackbar, Severity.Warning); return; }
+        await JoinLobbyByCode(code);
+    });
 
     private async Task JoinLobbyByCode(string code) {
         await OpenRoom(await Lobbies.Join(code, _userId, _userName));
     }
 
     private async Task OpenRoom(ServiceResult<LobbyView> result) {
-        if (!result.IsSuccess) { _message = ErrorText(result); return; }
+        if (!result.IsSuccess) { ShowError(ErrorText(result)); return; }
         StopRoomTracking();
         _view = null;
         _waitingForHost = false;
@@ -287,9 +308,9 @@
             var result = await Lobbies.Read(code, _userId, _userName);
             if (_view == null || _view.Code != code) return;
             if (result.IsSuccess) ApplyView(result.Value!);
-            else _message = ErrorText(result);
+            else ShowError(ErrorText(result));
         } catch (Exception ex) {
-            _message = "Connection interrupted. " + ex.Message;
+            ShowError("Connection interrupted. " + ex.Message);
         } finally {
             _refreshLock.Release();
         }
@@ -318,14 +339,18 @@
     private Task StartMatch() => RunAction(async () => ApplyActionResult(await Lobbies.Start(_view!.Code, _userId, _userName)));
 
     private Task CancelLobby() => RunAction(async () => {
-        if (!await JS.InvokeAsync<bool>("confirm", "Close this lobby for everyone? Players will be returned to the main screen.")) return;
+        var confirmed = await DialogService.ShowMessageBox("Close this lobby?", "Close this lobby for everyone? Players will be returned to the main screen.", yesText: "Close lobby", cancelText: "Keep it");
+        if (confirmed != true) return;
         var result = await Lobbies.Cancel(_view!.Code, _userId, _userName);
         if (result.IsSuccess && result.Value!.Status == "cancelled") await CloseRoom();
         else ApplyActionResult(result);
     });
 
     private Task LeaveLobby() => RunAction(async () => {
-        if (_view!.Status == "finished" && IsHost && !await JS.InvokeAsync<bool>("confirm", "Leave and close the lobby? All players will be disconnected.")) return;
+        if (_view!.Status == "finished" && IsHost) {
+            var confirmed = await DialogService.ShowMessageBox("Leave and close the lobby?", "Leave and close the lobby? All players will be disconnected.", yesText: "Leave and close", cancelText: "Stay");
+            if (confirmed != true) return;
+        }
         var result = await Lobbies.Leave(_view.Code, _userId, _userName);
         if (result.IsSuccess) await CloseRoom();
         else ApplyActionResult(result);
@@ -351,15 +376,15 @@
     private async Task CopyLink() {
         try {
             await JS.InvokeVoidAsync("navigator.clipboard.writeText", ShareLink);
-            _message = "Lobby link copied.";
+            Extension.ShowAlert("Lobby link copied.", Variant.Filled, Snackbar, Severity.Success);
         } catch (JSException) {
-            _message = "Select and copy the lobby link above.";
+            Extension.ShowAlert("Select and copy the lobby link above.", Variant.Filled, Snackbar, Severity.Info);
         }
     }
 
     private void ApplyActionResult(ServiceResult<LobbyView> result) {
         if (result.IsSuccess) ApplyView(result.Value!);
-        else _message = ErrorText(result);
+        else ShowError(ErrorText(result));
     }
     #endregion
 }

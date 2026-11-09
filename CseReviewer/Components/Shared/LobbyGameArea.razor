@@ -1,55 +1,63 @@
 @if (View.Status == "waiting") {
-    <p>Share the link or code. The host can start when at least two players are ready.</p>
+    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">Share the link or code. The host can start when at least two players are ready.</MudAlert>
 } else if (View.Status == "cancelled") {
-    <h2 class="text-xl font-bold">Lobby closed</h2>
-    <button type="button" class="secondary mt-4" @onclick="OnCloseLobby">Create or join another lobby</button>
+    <MudText Typo="Typo.h6">Lobby closed</MudText>
+    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Class="mt-4" OnClick="OnCloseLobby" StartIcon="@Icons.Material.Filled.Add">Create or join another lobby</MudButton>
 } else if (View.Status == "finished") {
     @if (WaitingForHost) {
-        <p>Waiting for the host to open the next game. Stay here. The same lobby link and players will be kept. You will need to mark yourself ready again.</p>
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">Waiting for the host to open the next game. Stay here. The same lobby link and players will be kept. You will need to mark yourself ready again.</MudAlert>
     } else {
-        <h2 class="text-2xl font-bold">@FinishedTitle</h2>
-        @if (IsHost) {
-            <p class="mt-4">🎮 Use <strong>New game · back to lobby</strong> to restart with the same players and a reshuffled question set. Use <strong>Close lobby &amp; leave</strong> when done.</p>
-        } else {
-            <p class="mt-4">🔄 Choose <strong>Back to lobby</strong> to wait for the host to start another game, or <strong>Leave lobby</strong> to exit.</p>
-        }
-        <h3 class="font-bold mt-6">Your answer review</h3>
-        @foreach (var result in View.Results ?? []) {
-            <details class="mt-4">
-                <summary>@(result.Index + 1). @result.Question.Prompt</summary>
-                <p>Your answer: @(result.Choice == null ? "Not answered" : result.Question.Options[result.Choice.Value])</p>
-                <p>Correct: @result.Question.Options[result.Question.Answer]</p>
-                <p>@result.Question.Explanation</p>
-                @foreach (var step in result.Question.Steps) {
-                    <p>@step</p>
-                }
-            </details>
-        }
+        <MudText Typo="Typo.h5">@FinishedTitle</MudText>
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mt-4">
+            @if (IsHost) {
+                <span>Use <strong>New game · back to lobby</strong> to restart with the same players and a reshuffled question set. Use <strong>Close lobby &amp; leave</strong> when done.</span>
+            } else {
+                <span>Choose <strong>Back to lobby</strong> to wait for the host to start another game, or <strong>Leave lobby</strong> to exit.</span>
+            }
+        </MudAlert>
+        <MudText Typo="Typo.h6" Class="mt-6">Your answer review</MudText>
+        <MudExpansionPanels Class="mt-2" Elevation="0" Outlined="true">
+            @foreach (var result in View.Results ?? []) {
+                <MudExpansionPanel Text="@($"{result.Index + 1}. {result.Question.Prompt}")">
+                    <MudText>Your answer: @(result.Choice == null ? "Not answered" : result.Question.Options[result.Choice.Value])</MudText>
+                    <MudText>Correct: @result.Question.Options[result.Question.Answer]</MudText>
+                    <MudText Color="Color.Secondary" Class="mt-2">@result.Question.Explanation</MudText>
+                    @foreach (var step in result.Question.Steps) {
+                        <MudText Typo="Typo.body2" Class="mt-1">@step</MudText>
+                    }
+                </MudExpansionPanel>
+            }
+        </MudExpansionPanels>
     }
 } else if (View.Review != null) {
     var reviewed = View.Review.Question.Question;
-    <p class="eyebrow">ROUND @(View.Index + 1) COMPLETE</p>
-    <h2 class="text-xl font-bold mt-3">@RoundResultTitle</h2>
-    <p class="mt-4">@reviewed.Prompt</p>
-    <p class="font-bold mt-3">Correct answer: @reviewed.Options[reviewed.Answer]</p>
-    <p class="mt-3">@reviewed.Explanation</p>
+    <MudText Typo="Typo.overline" Color="Color.Primary">Round @(View.Index + 1) complete</MudText>
+    <MudText Typo="Typo.h6" Class="mt-1">@RoundResultTitle</MudText>
+    <MudText Class="mt-4">@reviewed.Prompt</MudText>
+    <MudText Typo="Typo.subtitle2" Class="mt-3">Correct answer: @reviewed.Options[reviewed.Answer]</MudText>
+    <MudText Color="Color.Secondary" Class="mt-2">@reviewed.Explanation</MudText>
     @foreach (var step in reviewed.Steps) {
-        <p class="mt-2">@step</p>
+        <MudText Typo="Typo.body2" Class="mt-1">@step</MudText>
     }
-    <p class="mt-4">The next round starts automatically.</p>
+    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-4">The next round starts automatically.</MudText>
+    <MudProgressLinear Indeterminate="true" Class="mt-1" />
 } else if (View.Question == null) {
-    <p>You have finished. Waiting for other players or the timer to end.</p>
+    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">You have finished. Waiting for other players or the timer to end.</MudAlert>
 } else {
-    <p class="eyebrow">@View.Question.Category · QUESTION @(View.Index + 1)/@View.Count</p>
-    <h2 class="text-xl font-bold mt-4">@View.Question.Prompt</h2>
-    <div class="space-y-3 mt-6">
+    <MudText Typo="Typo.overline" Color="Color.Primary">@View.Question.Category · Question @(View.Index + 1)/@View.Count</MudText>
+    <MudText Typo="Typo.h6" Class="mt-2">@View.Question.Prompt</MudText>
+    <MudStack Spacing="3" Class="mt-5">
         @for (var i = 0; i < View.Question.Options.Length; i++) {
             var choice = i;
-            <button type="button" class="option @(SelectedChoice == choice ? "selected" : "")" disabled="@View.Answered" @onclick="() => OnChoiceSelected.InvokeAsync(choice)">@("ABCD"[choice]). @View.Question.Options[choice]</button>
+            <MudButton Variant="@(SelectedChoice == choice ? Variant.Filled : Variant.Outlined)" Color="@(SelectedChoice == choice ? Color.Primary : Color.Default)" FullWidth="true"
+                       Disabled="@View.Answered" Style="@AppTheme.ChoiceButtonStyle" OnClick="() => OnChoiceSelected.InvokeAsync(choice)">
+                <MudAvatar Size="Size.Small" Variant="Variant.Outlined" Class="mr-3">@("ABCD"[choice])</MudAvatar>
+                @View.Question.Options[choice]
+            </MudButton>
         }
-    </div>
-    <button type="button" class="primary mt-4" disabled="@(SelectedChoice == null || View.Answered || IsProcessing)" @onclick="OnSubmitAnswer">Submit answer</button>
-    <p class="mt-4">@(View.Answered ? "Incorrect. You are out for this round; wait for the next one." : "You can submit only once. The server decides whether your answer arrived before time expired.")</p>
+    </MudStack>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-5" Disabled="@(SelectedChoice == null || View.Answered || IsProcessing)" OnClick="OnSubmitAnswer" StartIcon="@Icons.Material.Filled.Send">Submit answer</MudButton>
+    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-4">@(View.Answered ? "Incorrect. You are out for this round; wait for the next one." : "You can submit only once. The server decides whether your answer arrived before time expired.")</MudText>
 }
 
 @code {
@@ -67,7 +75,7 @@
     #region Methods
     private string FinishedTitle {
         get {
-            if (View.Winners.Length == 0) return "Match finished — no winning score";
+            if (View.Winners.Length == 0) return "Match finished: no winning score";
             var names = string.Join(", ", View.Players.Where(p => View.Winners.Contains(p.Id)).Select(p => p.Name));
             return $"{(View.Winners.Length > 1 ? "Draw" : "Winner")}: {names}";
         }

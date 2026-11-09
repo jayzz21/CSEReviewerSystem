@@ -1,0 +1,51 @@
+<MudDialog>
+    <DialogContent>
+        <MudText>Save to resume at the next unanswered question, or discard this practice progress. Your imported questions stay in the database.</MudText>
+        @if (_error.Length > 0) {
+            <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Dense="true" Class="mt-3">@_error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" Disabled="@_isSubmitting" OnClick="KeepStudying" StartIcon="@Icons.Material.Filled.School">Keep studying</MudButton>
+        <MudButton Variant="Variant.Outlined" Disabled="@_isSubmitting" OnClick="DiscardAndLeave" StartIcon="@Icons.Material.Filled.DeleteOutline">Discard &amp; leave</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@_isSubmitting" OnClick="SaveAndLeave" StartIcon="@(_isSubmitting ? null : Icons.Material.Filled.Save)">
+            @if (_isSubmitting) {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            Save progress &amp; leave
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    #region Properties
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter, EditorRequired] public Func<bool, Task<string>> SaveOrDiscard { get; set; } = default!;
+    private string _error = "";
+    private bool _isSubmitting;
+    #endregion
+
+    #region Methods
+    private void KeepStudying() {
+        MudDialog.Cancel();
+    }
+
+    private Task SaveAndLeave() => LeaveWith(true);
+
+    private Task DiscardAndLeave() => LeaveWith(false);
+
+    private async Task LeaveWith(bool saveProgress) {
+        if (_isSubmitting) return;
+        _isSubmitting = true;
+        _error = "";
+        try {
+            _error = await SaveOrDiscard(saveProgress);
+            if (_error.Length == 0) MudDialog.Close(DialogResult.Ok(true));
+        } catch (Exception ex) {
+            _error = ex.Message;
+        } finally {
+            _isSubmitting = false;
+        }
+    }
+    #endregion
+}

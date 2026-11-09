@@ -39,7 +39,7 @@ This creates ignored build output under `artifacts/deploy-check`, without starti
 
 Alternatively create a **Blueprint** from the included `render.yaml` and supply the database connection when prompted.
 
-The Docker build compiles Tailwind and publishes .NET. Local appsettings files are excluded from the image; configuration comes from Render. Data and login encryption keys live in Supabase, so they survive app restarts. The current release offers database questions; AI generation deliberately returns `ai_not_available`.
+The Docker build publishes .NET (MudBlazor ships its own CSS, so there is no separate style build). Local appsettings files are excluded from the image; configuration comes from Render. Data and login encryption keys live in Supabase, so they survive app restarts. The current release offers database questions; AI generation deliberately returns `ai_not_available`.
 
 ## Free-plan limits
 

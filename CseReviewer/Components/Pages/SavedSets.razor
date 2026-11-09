@@ -2,39 +2,43 @@
 @attribute [Authorize]
 @inject PracticeService Practice
 @inject CurrentUserAccessor Users
+@inject ISnackbar Snackbar
 
 <PageTitle>My saved sets · Husay</PageTitle>
 
-<NoticeBanner Message="@_notice" />
+<MudText Typo="Typo.overline" Color="Color.Primary">Your personal library</MudText>
+<MudText Typo="Typo.h4" Class="mt-1">Saved for your next study session.</MudText>
+<MudText Color="Color.Secondary" Class="mt-3">Your sets and saved progress are stored in the database and linked to your account.</MudText>
 
-<p class="eyebrow">YOUR PERSONAL LIBRARY</p>
-<h1 class="text-3xl font-bold mt-3">Saved for your next study session.</h1>
-<p class="text-slate-500 mt-3">Your sets and saved progress are stored in the database and linked to your account.</p>
-
-<div class="grid md:grid-cols-2 gap-5 mt-8">
-    @if (_isLoading) {
-        <p>Loading…</p>
-    } else if (_sets.Count == 0) {
-        <div class="panel p-8 col-span-full">
-            <h2 class="text-xl font-bold">A fresh start for your library.</h2>
-            <p class="text-slate-500 mt-3">Your unfinished sets appear here when you choose Save progress before leaving a quiz.</p>
-        </div>
-    } else {
+@if (_isLoading) {
+    <MudProgressLinear Indeterminate="true" Class="mt-6" />
+} else if (_sets.Count == 0) {
+    <MudPaper Class="pa-8 mt-6">
+        <MudText Typo="Typo.h6">A fresh start for your library.</MudText>
+        <MudText Color="Color.Secondary" Class="mt-2">Your unfinished sets appear here when you choose Save progress before leaving a quiz.</MudText>
+    </MudPaper>
+} else {
+    <MudGrid Class="mt-4">
         @foreach (var set in _sets) {
-            <article class="panel p-6">
-                <p class="eyebrow">@set.Source · @set.Count QUESTIONS</p>
-                <h2 class="text-xl font-bold mt-3">@set.Title</h2>
-                <p class="text-sm text-slate-500 mt-2">@set.Level · @set.Difficulty</p>
-                <a href="/Practice/@set.Id" class="secondary mt-5 inline-block">Resume practice →</a>
-            </article>
+            <MudItem xs="12" md="6">
+                <MudCard>
+                    <MudCardContent>
+                        <MudText Typo="Typo.overline" Color="Color.Primary">@set.Source · @set.Count questions</MudText>
+                        <MudText Typo="Typo.h6">@set.Title</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">@set.Level · @set.Difficulty</MudText>
+                    </MudCardContent>
+                    <MudCardActions>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Href="@("/Practice/" + set.Id)" EndIcon="@Icons.Material.Filled.ArrowForward">Resume practice</MudButton>
+                    </MudCardActions>
+                </MudCard>
+            </MudItem>
         }
-    }
-</div>
+    </MudGrid>
+}
 
 @code {
     #region Properties
     private List<StudySetSummary> _sets = [];
-    private string _notice = "";
     private bool _isLoading = true;
     #endregion
 
@@ -44,7 +48,7 @@
             var user = await Users.Get();
             _sets = await Practice.GetSavedSets(user.Id);
         } catch (Exception ex) {
-            _notice = ex.Message;
+            Extension.ShowAlert(ex.Message, Variant.Filled, Snackbar, Severity.Error);
         } finally {
             _isLoading = false;
         }

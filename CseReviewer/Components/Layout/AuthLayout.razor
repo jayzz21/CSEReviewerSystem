@@ -1,16 +1,43 @@
 @inherits LayoutComponentBase
+@inject IJSRuntime JS
 
-<main class="max-w-6xl mx-auto p-6 lg:p-12">
-    <a href="/" class="text-3xl font-bold text-teal-800">h. husay</a>
-    <div class="grid md:grid-cols-2 gap-7 mt-9">
-        <section class="p-6">
-            <p class="eyebrow">YOUR NEXT CHAPTER</p>
-            <h1 class="text-3xl font-bold mt-4">A little practice.<br>A brighter future.</h1>
-            <p class="text-slate-500 leading-7 mt-6">Sign in to keep your reviewer sets and study progress together, wherever you practice.</p>
-            <p class="mt-6">Your answers and progress belong to your account.</p>
-        </section>
-        <section class="panel p-6 md:p-8">
-            @Body
-        </section>
-    </div>
-</main>
+<AppProviders @bind-IsDarkMode="_isDarkMode" />
+
+<MudLayout>
+    <MudMainContent>
+        <MudContainer MaxWidth="AppTheme.PageMaxWidth" Class="py-8">
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                <MudLink Href="/" Underline="Underline.None"><MudText Typo="Typo.h5" Color="Color.Primary"><strong>h. husay</strong></MudText></MudLink>
+                <MudTooltip Text="@(_isDarkMode ? "Switch to light mode" : "Switch to dark mode")">
+                    <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)" OnClick="ToggleDarkMode" aria-label="Toggle dark mode" />
+                </MudTooltip>
+            </MudStack>
+            <MudGrid Class="mt-8">
+                <MudItem xs="12" md="6">
+                    <MudText Typo="Typo.overline" Color="Color.Primary">Your next chapter</MudText>
+                    <MudText Typo="Typo.h4" Class="mt-2">A little practice.<br />A brighter future.</MudText>
+                    <MudText Color="Color.Secondary" Class="mt-4">Sign in to keep your reviewer sets and study progress together, wherever you practice.</MudText>
+                    <MudText Class="mt-4">Your answers and progress belong to your account.</MudText>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudPaper Class="@AppTheme.LargeCardPadding">
+                        @Body
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    #region Properties
+    private bool _isDarkMode;
+    #endregion
+
+    #region Methods
+    private async Task ToggleDarkMode() {
+        _isDarkMode = !_isDarkMode;
+        await JS.InvokeVoidAsync("localStorage.setItem", AppTheme.DarkModeStorageKey, _isDarkMode ? "true" : "false");
+    }
+    #endregion
+}

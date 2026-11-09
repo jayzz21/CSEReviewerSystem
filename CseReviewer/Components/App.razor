@@ -5,36 +5,22 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <base href="/">
     <title>Husay · CSE Reviewer</title>
-    <link rel="stylesheet" href="/app.css">
-    <script>
-        (function () {
-            try {
-                if (localStorage.getItem('dark_mode') === 'true') {
-                    document.documentElement.classList.add('dark');
-                }
-            } catch (_) {}
-        })();
-    </script>
-    <HeadOutlet @rendermode="RenderModeForPage" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="_content/MudBlazor/MudBlazor.min.css">
+    <link rel="stylesheet" href="/site.css">
+    <HeadOutlet @rendermode="_interactiveWithoutPrerender" />
 </head>
-<body class="bg-slate-50 text-slate-800">
-    <Routes @rendermode="RenderModeForPage" />
-    <script src="/theme.js" defer></script>
-    <script src="/password-toggle.js" defer></script>
+<body>
+    <Routes @rendermode="_interactiveWithoutPrerender" />
+    <script src="/auth.js"></script>
     <script src="_framework/blazor.web.js"></script>
+    <script src="_content/MudBlazor/MudBlazor.min.js"></script>
 </body>
 </html>
 
 @code {
     #region Properties
-    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
     private static readonly IComponentRenderMode _interactiveWithoutPrerender = new InteractiveServerRenderMode(prerender: false);
-    private IComponentRenderMode? RenderModeForPage => IsSignInPage ? null : _interactiveWithoutPrerender;
-    private bool IsSignInPage {
-        get {
-            var path = HttpContext.Request.Path;
-            return path.StartsWithSegments("/Login") || path.StartsWithSegments("/Register") || path.StartsWithSegments("/Change-Password");
-        }
-    }
     #endregion
 }

@@ -24,7 +24,7 @@ The lobby page is live: when anyone joins, readies up, answers, or the host star
 ## Deploying this update
 
 1. Run **`supabase-multiplayer-setup.sql`** in Supabase SQL Editor. It adds the `Lobbies` table and enables RLS without modifying existing accounts/questions. The app also performs the same additive setup at startup.
-2. Commit/push all multiplayer source changes, the SQL file, and rebuilt `app.css` to the repository connected to Render.
+2. Commit/push all multiplayer source changes, the SQL file to the repository connected to Render.
 3. Deploy the latest commit in Render. The lobby page is then at `https://csereviewersystem.onrender.com/Multiplayer`.
 4. Test with two separate accounts/devices. Tabs sharing the same browser profile use the same signed-in account and count as one player.
 

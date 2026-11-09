@@ -1,104 +1,106 @@
 @page "/Practice/{SetId:guid}"
 @attribute [Authorize]
-@using System.Globalization
 @inject PracticeService Practice
 @inject CurrentUserAccessor Users
 @inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
 
 <PageTitle>@(_set?.Title ?? "Practice") · Husay</PageTitle>
 
 <NavigationLock OnBeforeInternalNavigation="ConfirmLeaving" ConfirmExternalNavigation="@HasUnfinishedPractice" />
 
-<NoticeBanner Message="@_notice" />
-
 @if (_isLoading) {
-    <p>Loading…</p>
+    <MudProgressLinear Indeterminate="true" />
 } else if (_set == null) {
-    <p>Practice set not found.</p>
-    <a href="/" class="text-sm text-teal-800 mt-4 inline-block">← Back to create</a>
+    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">Practice set not found.</MudAlert>
+    <MudButton Href="/" Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ArrowBack" Class="mt-4">Back to create</MudButton>
 } else {
-    <a id="back" href="/" class="text-sm text-teal-800 mb-6 inline-block">← Back to create</a>
-    <div class="flex flex-wrap items-center justify-between gap-4">
-        <div>
-            <p class="eyebrow">@_set.Level · @_set.Source · @_set.Difficulty</p>
-            <h1 class="text-3xl font-bold mt-3">@_set.Title</h1>
-        </div>
-    </div>
-    <div class="mt-8 flex justify-between text-sm text-slate-500">
-        <span>@(_showSummary ? "Practice complete" : $"Question {_index + 1} of {_set.Questions.Count}")</span>
-        <span>@CorrectCount correct · @_results.Count answered</span>
-    </div>
-    <div class="h-2 bg-slate-200 rounded-full mt-3 overflow-hidden">
-        <div id="progress" class="h-full bg-teal-700 transition-all" style="width:@ProgressWidth"></div>
-    </div>
-    <div class="panel p-6 md:p-9 mt-6">
+    <MudButton Href="/" Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ArrowBack" Class="mb-4">Back to create</MudButton>
+    <MudText Typo="Typo.overline" Color="Color.Primary">@_set.Level · @_set.Source · @_set.Difficulty</MudText>
+    <MudText Typo="Typo.h4" Class="mt-1">@_set.Title</MudText>
+
+    <MudStack Row="true" Justify="Justify.SpaceBetween" Class="mt-6">
+        <MudText Typo="Typo.body2" Color="Color.Secondary">@(_showSummary ? "Practice complete" : $"Question {_index + 1} of {_set.Questions.Count}")</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">@CorrectCount correct · @_results.Count answered</MudText>
+    </MudStack>
+    <MudProgressLinear Value="@ProgressPercent" Color="Color.Primary" Size="Size.Medium" Rounded="true" Class="mt-2" />
+
+    <MudPaper Class="@($"{AppTheme.LargeCardPadding} {AppTheme.SectionGap}")">
         @if (_showSummary) {
-            <p class="eyebrow">ONE STEP CLOSER</p>
-            <h2 class="text-3xl font-bold mt-4">You showed up. That matters.</h2>
-            <p class="text-5xl font-bold text-teal-800 mt-8">@CorrectCount<span class="text-2xl text-slate-400"> / @_results.Count</span></p>
-            <p class="text-slate-500 mt-4">@ScorePercent% on this practice set. Review your answers below, then start a newly selected set.</p>
-            <div class="mt-7 space-y-3">
+            <MudText Typo="Typo.overline" Color="Color.Primary">One step closer</MudText>
+            <MudText Typo="Typo.h4" Class="mt-2">You showed up. That matters.</MudText>
+            <MudText Typo="Typo.h2" Color="Color.Primary" Class="mt-6">@CorrectCount<MudText Typo="Typo.h5" Color="Color.Secondary" Inline="true"> / @_results.Count</MudText></MudText>
+            <MudText Color="Color.Secondary" Class="mt-2">@ScorePercent% on this practice set. Review your answers below, then start a newly selected set.</MudText>
+            <MudExpansionPanels Class="mt-6" Elevation="0" Outlined="true">
                 @for (var i = 0; i < _set.Questions.Count; i++) {
                     var question = _set.Questions[i];
                     var result = _results[i];
-                    <details class="border border-slate-200 rounded-xl p-4">
-                        <summary class="cursor-pointer font-semibold">@(result.Correct ? "✓" : "○") @question.Prompt</summary>
-                        <p class="mt-3">Correct answer: @question.Options[result.Answer]</p>
-                        <p class="text-slate-500 mt-2">@result.Explanation</p>
-                        @foreach (var step in result.Steps) {
-                            <p class="text-sm mt-2">@step</p>
-                        }
-                    </details>
+                    <MudExpansionPanel>
+                        <TitleContent>
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@(result.Correct ? Icons.Material.Filled.CheckCircle : Icons.Material.Outlined.Circle)" Color="@(result.Correct ? Color.Success : Color.Default)" />
+                                <MudText>@question.Prompt</MudText>
+                            </MudStack>
+                        </TitleContent>
+                        <ChildContent>
+                            <MudText>Correct answer: @question.Options[result.Answer]</MudText>
+                            <MudText Color="Color.Secondary" Class="mt-2">@result.Explanation</MudText>
+                            @foreach (var step in result.Steps) {
+                                <MudText Typo="Typo.body2" Class="mt-2">@step</MudText>
+                            }
+                        </ChildContent>
+                    </MudExpansionPanel>
                 }
-            </div>
-            <button id="retry" type="button" class="primary mt-7" disabled="@_isProcessing" @onclick="StartNextSet">Start next set →</button>
+            </MudExpansionPanels>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-6" Disabled="@_isProcessing" OnClick="StartNextSet" EndIcon="@(_isProcessing ? null : Icons.Material.Filled.ArrowForward)">
+                @if (_isProcessing) {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                }
+                Start next set
+            </MudButton>
         } else {
             var current = _set.Questions[_index];
-            <p class="eyebrow">@_set.Category</p>
-            <h2 class="text-xl md:text-2xl font-semibold leading-relaxed mt-4">@current.Prompt</h2>
-            <div class="space-y-3 mt-7">
+            <MudText Typo="Typo.overline" Color="Color.Primary">@_set.Category</MudText>
+            <MudText Typo="Typo.h6" Class="mt-2">@current.Prompt</MudText>
+            <MudStack Spacing="3" Class="mt-5">
                 @for (var i = 0; i < current.Options.Length; i++) {
                     var choice = i;
-                    <button type="button" class="option @OptionClass(choice)" aria-pressed="@(_selectedChoice == choice)" disabled="@(_feedback != null || _isProcessing)" @onclick="() => SelectChoice(choice)">
-                        <span class="text-sm rounded-lg bg-slate-100 px-3 py-2 font-bold">@("ABCD"[choice])</span>
-                        <span>@current.Options[choice]</span>
-                    </button>
+                    <MudButton Variant="@OptionVariant(choice)" Color="@OptionColor(choice)" FullWidth="true" aria-pressed="@(_selectedChoice == choice ? "true" : "false")"
+                               Style="@AppTheme.ChoiceButtonStyle" OnClick="() => SelectChoice(choice)">
+                        <MudAvatar Size="Size.Small" Variant="Variant.Outlined" Class="mr-3">@("ABCD"[choice])</MudAvatar>
+                        @current.Options[choice]
+                    </MudButton>
                 }
-            </div>
+            </MudStack>
             @if (_feedback == null) {
-                <button id="check" type="button" class="primary mt-7" disabled="@(_selectedChoice == null || _isProcessing)" @onclick="CheckAnswer">Check answer →</button>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-6" Disabled="@(_selectedChoice == null || _isProcessing)" OnClick="CheckAnswer"
+                           EndIcon="@(_isProcessing ? null : Icons.Material.Filled.ArrowForward)">
+                    @if (_isProcessing) {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                    }
+                    Check answer
+                </MudButton>
             } else {
-                <div aria-live="polite">
-                    <div class="mt-7 bg-slate-50 rounded-xl p-6">
-                        <h3 class="font-bold text-lg">@(_feedback.Correct ? "✓ Correct. Nicely done!" : "Keep going — this is how you learn.")</h3>
-                        <p class="mt-3 font-semibold">Correct answer: @("ABCD"[_feedback.Answer]). @current.Options[_feedback.Answer]</p>
-                        <p class="mt-3 text-slate-600 leading-7">@_feedback.Explanation</p>
-                        @if (_feedback.Steps.Length > 0) {
-                            <h4 class="font-bold mt-5">Step-by-step solution</h4>
-                            <ol class="list-decimal pl-5 space-y-2 mt-3 text-slate-600">
-                                @foreach (var step in _feedback.Steps) {
-                                    <li>@step</li>
-                                }
-                            </ol>
-                        }
-                    </div>
-                    <button id="next" type="button" class="primary mt-6" @onclick="NextQuestion">@(_index + 1 == _set.Questions.Count ? "See my results" : "Next question →")</button>
-                </div>
+                <MudAlert Severity="@(_feedback.Correct ? Severity.Success : Severity.Info)" Variant="Variant.Outlined" Class="mt-6" NoIcon="false">
+                    <MudText Typo="Typo.subtitle1">@(_feedback.Correct ? "Correct. Nicely done!" : "Keep going, this is how you learn.")</MudText>
+                    <MudText Typo="Typo.subtitle2" Class="mt-2">Correct answer: @("ABCD"[_feedback.Answer]). @current.Options[_feedback.Answer]</MudText>
+                    <MudText Typo="Typo.body2" Class="mt-2">@_feedback.Explanation</MudText>
+                    @if (_feedback.Steps.Length > 0) {
+                        <MudText Typo="Typo.subtitle2" Class="mt-3">Step-by-step solution</MudText>
+                        <ol style="padding-left:20px;margin:4px 0 0 0;">
+                            @foreach (var step in _feedback.Steps) {
+                                <li><MudText Typo="Typo.body2" Inline="true">@step</MudText></li>
+                            }
+                        </ol>
+                    }
+                </MudAlert>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" OnClick="NextQuestion" EndIcon="@Icons.Material.Filled.ArrowForward">
+                    @(_index + 1 == _set.Questions.Count ? "See my results" : "Next question")
+                </MudButton>
             }
         }
-    </div>
-}
-
-@if (_showLeaveDialog) {
-    <ModalDialog Title="Save your progress before leaving?">
-        <p class="mt-3">Save to resume at the next unanswered question, or discard this practice progress. Your imported questions stay in the database.</p>
-        <p role="alert" class="mt-3">@_leaveError</p>
-        <div class="flex flex-wrap gap-3 mt-6">
-            <button type="button" class="primary" disabled="@_isProcessing" @onclick="SaveAndLeave">Save progress &amp; leave</button>
-            <button type="button" class="secondary" disabled="@_isProcessing" @onclick="DiscardAndLeave">Discard &amp; leave</button>
-            <button type="button" class="secondary" disabled="@_isProcessing" @onclick="KeepStudying">Keep studying</button>
-        </div>
-    </ModalDialog>
+    </MudPaper>
 }
 
 @code {
@@ -109,20 +111,17 @@
     private List<AnswerFeedback> _results = [];
     private CurrentUser? _user;
     private Guid _loadedSetId;
-    private string _notice = "";
-    private string _leaveError = "";
     private string _pendingUri = "/";
     private int _index;
     private int? _selectedChoice;
     private bool _isLoading = true;
     private bool _isProcessing;
     private bool _showSummary;
-    private bool _showLeaveDialog;
     private bool _allowLeave;
     private bool HasUnfinishedPractice => _set != null && _results.Count < _set.Questions.Count;
     private int CorrectCount => _results.Count(r => r.Correct);
     private int ScorePercent => _results.Count == 0 ? 0 : (int)Math.Round(CorrectCount * 100.0 / _results.Count, MidpointRounding.AwayFromZero);
-    private string ProgressWidth => _set == null || _set.Questions.Count == 0 ? "0%" : (_results.Count * 100.0 / _set.Questions.Count).ToString("0.##", CultureInfo.InvariantCulture) + "%";
+    private double ProgressPercent => _set == null || _set.Questions.Count == 0 ? 0 : _results.Count * 100.0 / _set.Questions.Count;
     #endregion
 
     #region Lifecycle
@@ -140,7 +139,6 @@
     #region Methods
     private async Task LoadSet() {
         _isLoading = true;
-        _notice = "";
         try {
             var result = await Practice.GetSet(_user!.Id, SetId);
             if (!result.IsSuccess) { _set = null; return; }
@@ -153,34 +151,41 @@
             _allowLeave = false;
         } catch (Exception ex) {
             _set = null;
-            _notice = ex.Message;
+            Extension.ShowAlert(ex.Message, Variant.Filled, Snackbar, Severity.Error);
         } finally {
             _isLoading = false;
         }
     }
 
-    private string OptionClass(int choice) {
-        if (_feedback == null) return _selectedChoice == choice ? "selected" : "";
-        if (choice == _feedback.Answer) return "correct";
-        return choice == _feedback.Choice ? "wrong" : "";
+    private Variant OptionVariant(int choice) {
+        if (_feedback != null) return choice == _feedback.Answer || choice == _feedback.Choice ? Variant.Filled : Variant.Outlined;
+        return _selectedChoice == choice ? Variant.Filled : Variant.Outlined;
+    }
+
+    private Color OptionColor(int choice) {
+        if (_feedback != null) {
+            if (choice == _feedback.Answer) return Color.Success;
+            return choice == _feedback.Choice ? Color.Error : Color.Default;
+        }
+        return _selectedChoice == choice ? Color.Primary : Color.Default;
     }
 
     private void SelectChoice(int choice) {
+        if (_feedback != null) return;
         _selectedChoice = choice;
     }
 
     private async Task CheckAnswer() {
         if (_selectedChoice == null || _isProcessing) return;
         _isProcessing = true;
-        _notice = "";
         try {
             var result = await Practice.CheckAnswer(_user!.Id, SetId, _index, _selectedChoice.Value);
-            if (!result.IsSuccess) { _notice = result.Error; return; }
+            if (!result.IsSuccess) { Extension.ShowAlert(result.Error, Variant.Filled, Snackbar, Severity.Error); return; }
             _feedback = result.Value;
             _results.Add(result.Value!);
             if (_results.Count == _set!.Questions.Count) await Practice.DiscardProgress(_user.Id, SetId);
         } catch (Exception ex) {
-            _notice = ex.Message;
+            Extension.ShowAlert(ex.Message, Variant.Filled, Snackbar, Severity.Error);
         } finally {
             _isProcessing = false;
         }
@@ -196,52 +201,36 @@
     private async Task StartNextSet() {
         if (_isProcessing) return;
         _isProcessing = true;
-        _notice = "";
         try {
             var result = await Practice.StartNextSet(_user!.Id, SetId, CancellationToken.None);
-            if (!result.IsSuccess) { _notice = result.Error; return; }
+            if (!result.IsSuccess) { Extension.ShowAlert(result.Error, Variant.Filled, Snackbar, Severity.Error); return; }
             Navigation.NavigateTo("/Practice/" + result.Value);
         } catch (Exception ex) {
-            _notice = ex.Message;
+            Extension.ShowAlert(ex.Message, Variant.Filled, Snackbar, Severity.Error);
         } finally {
             _isProcessing = false;
         }
     }
 
-    private Task ConfirmLeaving(LocationChangingContext context) {
-        if (_allowLeave || !HasUnfinishedPractice) return Task.CompletedTask;
+    private async Task ConfirmLeaving(LocationChangingContext context) {
+        if (_allowLeave || !HasUnfinishedPractice) return;
         context.PreventNavigation();
         _pendingUri = context.TargetLocation;
-        _leaveError = "";
-        _showLeaveDialog = true;
-        return Task.CompletedTask;
+        var parameters = new DialogParameters<LeaveQuizDialog> {
+            { x => x.SaveOrDiscard, SaveOrDiscardProgress }
+        };
+        var dialog = await DialogService.ShowAsync<LeaveQuizDialog>("Save your progress before leaving?", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, BackdropClick = false });
+        var result = await dialog.Result;
+        if (result == null || result.Canceled) return;
+        _allowLeave = true;
+        Navigation.NavigateTo(_pendingUri);
     }
 
-    private Task SaveAndLeave() => LeaveWith(true);
-
-    private Task DiscardAndLeave() => LeaveWith(false);
-
-    private void KeepStudying() {
-        _showLeaveDialog = false;
-    }
-
-    private async Task LeaveWith(bool saveProgress) {
-        if (_isProcessing) return;
-        _isProcessing = true;
-        _leaveError = "";
-        try {
-            var result = saveProgress
-                ? await Practice.SaveProgress(_user!.Id, SetId, _results.Select(r => r.Choice).ToArray())
-                : await Practice.DiscardProgress(_user!.Id, SetId);
-            if (!result.IsSuccess) { _leaveError = result.Error; return; }
-            _allowLeave = true;
-            _showLeaveDialog = false;
-            Navigation.NavigateTo(_pendingUri);
-        } catch (Exception ex) {
-            _leaveError = ex.Message;
-        } finally {
-            _isProcessing = false;
-        }
+    private async Task<string> SaveOrDiscardProgress(bool saveProgress) {
+        var result = saveProgress
+            ? await Practice.SaveProgress(_user!.Id, SetId, _results.Select(r => r.Choice).ToArray())
+            : await Practice.DiscardProgress(_user!.Id, SetId);
+        return result.IsSuccess ? "" : (result.Error.Length > 0 ? result.Error : "Something went wrong. Please try again.");
     }
     #endregion
 }

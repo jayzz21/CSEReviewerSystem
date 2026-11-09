@@ -1,48 +1,76 @@
 @page "/Login"
 @page "/Register"
 @layout AuthLayout
+@using System.Text.RegularExpressions
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
 
-<PageTitle>Sign in · Husay</PageTitle>
+<PageTitle>@(IsRegisterPage ? "Create account" : "Sign in") · Husay</PageTitle>
 
 @if (IsRegisterPage) {
-    <h2 id="auth-title" class="text-2xl font-bold">Create your study account</h2>
-    <p id="auth-message" class="mt-4 text-sm" role="status" aria-live="polite">@Message</p>
-    <form id="register-form" method="post" action="/Account/Register" class="space-y-4 mt-6">
-        <AntiforgeryToken />
-        <label class="block">Username
-            <input id="register-name" name="username" autocomplete="username" pattern="[A-Za-z0-9_]{3,30}" minlength="3" maxlength="30" required>
-            <span class="text-xs text-slate-500">3–30 letters, numbers or underscores.</span>
-        </label>
-        <PasswordField Id="register-password" Name="password" Label="Password" Autocomplete="new-password" MinLength="12" Hint="At least 12 characters." />
-        <button class="primary" type="submit">Create account</button>
+    <MudText Typo="Typo.h5">Create your study account</MudText>
+    @if (_error.Length > 0) {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="mt-4">@_error</MudAlert>
+    }
+    <form @onsubmit="CreateAccount">
+        <MudStack Spacing="3" Class="mt-6">
+            <MudTextField T="string" Label="Username" Variant="Variant.Outlined" @bind-Value="_username" Immediate="true" MaxLength="30"
+                          HelperText="3-30 letters, numbers or underscores." Disabled="@_isSubmitting"
+                          UserAttributes="@(new Dictionary<string, object> { { "autocomplete", "username" } })" />
+            <MudTextField T="string" Label="Password" Variant="Variant.Outlined" InputType="@PasswordInputType" @bind-Value="_password" Immediate="true" MaxLength="128"
+                          HelperText="At least 12 characters." Disabled="@_isSubmitting"
+                          Adornment="Adornment.End" AdornmentIcon="@PasswordIcon" OnAdornmentClick="TogglePasswordVisibility" AdornmentAriaLabel="Show or hide password"
+                          UserAttributes="@(new Dictionary<string, object> { { "autocomplete", "new-password" } })" />
+            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" Disabled="@_isSubmitting"
+                       StartIcon="@(_isSubmitting ? null : Icons.Material.Filled.PersonAdd)">
+                @if (_isSubmitting) {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                }
+                Create account
+            </MudButton>
+        </MudStack>
     </form>
-    <div class="space-y-4 mt-6">
-        <a href="/Login@(ReturnUrlQuery)" class="text-teal-800 underline">Already registered? Sign in</a>
-    </div>
+    <MudLink Href="@("/Login" + ReturnUrlQuery)" Class="mt-6 d-block">Already registered? Sign in</MudLink>
 } else {
-    <h2 id="auth-title" class="text-2xl font-bold">Welcome back</h2>
-    <p id="auth-message" class="mt-4 text-sm" role="status" aria-live="polite">@Message</p>
-    <form id="login-form" method="post" action="/Account/Login" class="space-y-4 mt-6">
-        <AntiforgeryToken />
-        <input type="hidden" name="returnUrl" value="@SafeReturnUrl">
-        <label class="block">Username
-            <input id="login-name" name="login" autocomplete="username" required maxlength="254">
-        </label>
-        <PasswordField Id="login-password" Name="password" Label="Password" />
-        <button class="primary" type="submit">Sign in →</button>
+    <MudText Typo="Typo.h5">Welcome back</MudText>
+    @if (Registered == "1" && _error.Length == 0) {
+        <MudAlert Severity="Severity.Success" Variant="Variant.Outlined" Class="mt-4">Account created. Sign in with your username and password.</MudAlert>
+    }
+    @if (_error.Length > 0) {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="mt-4">@_error</MudAlert>
+    }
+    <form @onsubmit="SignIn">
+        <MudStack Spacing="3" Class="mt-6">
+            <MudTextField T="string" Label="Username" Variant="Variant.Outlined" @bind-Value="_username" Immediate="true" MaxLength="254" Disabled="@_isSubmitting"
+                          UserAttributes="@(new Dictionary<string, object> { { "autocomplete", "username" } })" />
+            <MudTextField T="string" Label="Password" Variant="Variant.Outlined" InputType="@PasswordInputType" @bind-Value="_password" Immediate="true" MaxLength="128" Disabled="@_isSubmitting"
+                          Adornment="Adornment.End" AdornmentIcon="@PasswordIcon" OnAdornmentClick="TogglePasswordVisibility" AdornmentAriaLabel="Show or hide password"
+                          UserAttributes="@(new Dictionary<string, object> { { "autocomplete", "current-password" } })" />
+            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" Disabled="@_isSubmitting"
+                       StartIcon="@(_isSubmitting ? null : Icons.Material.Filled.Login)">
+                @if (_isSubmitting) {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                }
+                Sign in
+            </MudButton>
+        </MudStack>
     </form>
-    <div class="space-y-4 mt-6">
-        <a href="/Register" class="text-teal-800 underline">New here? Create an account</a>
-    </div>
+    <MudLink Href="/Register" Class="mt-6 d-block">New here? Create an account</MudLink>
 }
 
 @code {
     #region Properties
-    [SupplyParameterFromQuery(Name = "error")] public string? ErrorCode { get; set; }
     [SupplyParameterFromQuery(Name = "registered")] public string? Registered { get; set; }
     [SupplyParameterFromQuery(Name = "returnUrl")] public string? ReturnUrl { get; set; }
+    private string _username = "";
+    private string _password = "";
+    private string _error = "";
+    private bool _showPassword;
+    private bool _isSubmitting;
     private bool IsRegisterPage => Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("Register", StringComparison.OrdinalIgnoreCase);
+    private InputType PasswordInputType => _showPassword ? InputType.Text : InputType.Password;
+    private string PasswordIcon => _showPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility;
     private string SafeReturnUrl {
         get {
             var isLocalPath = !string.IsNullOrEmpty(ReturnUrl) && ReturnUrl.StartsWith('/') && !ReturnUrl.StartsWith("//") && !ReturnUrl.StartsWith("/\\");
@@ -50,20 +78,60 @@
         }
     }
     private string ReturnUrlQuery => SafeReturnUrl.Length == 0 ? "" : "?returnUrl=" + Uri.EscapeDataString(SafeReturnUrl);
-    private string Message {
-        get {
-            if (Registered == "1") return "Account created. Sign in with your username and password.";
-            if (ErrorCode == "toomany") return "Too many attempts. Wait one minute and try again.";
-            if (IsRegisterPage) return ErrorCode switch {
-                "taken" => "That username is already taken.",
-                "invalid" => "Use a 3–30 character username (letters, numbers, underscores) and a password of 12–128 characters.",
-                _ => ""
-            };
-            return ErrorCode switch {
-                "invalid" => "Invalid username or password.",
-                "legacy" => "Invalid username or password. For an old email account, ask the Super Admin to set a password.",
-                _ => ""
-            };
+    #endregion
+
+    #region Methods
+    private void TogglePasswordVisibility() {
+        _showPassword = !_showPassword;
+    }
+
+    private string ErrorText(AuthResponse response) {
+        if (response.Status == 429) return "Too many attempts. Wait one minute and try again.";
+        return response.Error.Length > 0 ? response.Error : "Request failed. Please retry.";
+    }
+
+    private async Task SignIn() {
+        if (_isSubmitting) return;
+        _error = "";
+        if (string.IsNullOrWhiteSpace(_username) || string.IsNullOrEmpty(_password)) {
+            _error = "Enter your username and password.";
+            return;
+        }
+        _isSubmitting = true;
+        try {
+            var response = await JS.InvokeAsync<AuthResponse>("husayAuth.post", "login", new { login = _username.Trim(), password = _password });
+            if (response.Status != 200) { _error = ErrorText(response); return; }
+            _password = "";
+            var destination = SafeReturnUrl.Length == 0 ? "/" : SafeReturnUrl;
+            Navigation.NavigateTo(response.MustChangePassword ? "/Change-Password" + ReturnUrlQuery : destination, forceLoad: true);
+        } catch (Exception ex) {
+            Extension.ShowAlert(ex.Message, Variant.Filled, Snackbar, Severity.Error);
+        } finally {
+            _isSubmitting = false;
+        }
+    }
+
+    private async Task CreateAccount() {
+        if (_isSubmitting) return;
+        _error = "";
+        if (!Regex.IsMatch(_username ?? "", "^[A-Za-z0-9_]{3,30}$")) {
+            _error = "Use a 3-30 character username with letters, numbers or underscores.";
+            return;
+        }
+        if (_password.Length < 12 || _password.Length > 128) {
+            _error = "Use a password of 12-128 characters.";
+            return;
+        }
+        _isSubmitting = true;
+        try {
+            var response = await JS.InvokeAsync<AuthResponse>("husayAuth.post", "register", new { username = _username, password = _password });
+            if (response.Status != 200) { _error = ErrorText(response); return; }
+            _password = "";
+            Navigation.NavigateTo("/Login?registered=1" + ReturnUrlQuery.Replace("?", "&"));
+        } catch (Exception ex) {
+            Extension.ShowAlert(ex.Message, Variant.Filled, Snackbar, Severity.Error);
+        } finally {
+            _isSubmitting = false;
         }
     }
     #endregion

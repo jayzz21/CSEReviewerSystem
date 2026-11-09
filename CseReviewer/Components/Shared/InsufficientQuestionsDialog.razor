@@ -1,0 +1,34 @@
+<MudDialog>
+    <DialogContent>
+        <MudText>
+            You requested @Shortfall.Requested questions for @(IsFinalExam ? "the 4 exam subjects combined" : Shortfall.Category), but only @Shortfall.Available matching @(Shortfall.Available == 1 ? "question is" : "questions are") available in the database.
+        </MudText>
+        @if (Shortfall.Breakdown.Count > 1) {
+            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true" Class="mt-4">
+                <strong>Subject breakdown:</strong> @string.Join(" · ", Shortfall.Breakdown.Select(b => $"{b.Category}: {b.Count} available"))
+            </MudAlert>
+        }
+        <MudText Typo="Typo.subtitle2" Class="mt-4">Some questions are not enough. Do you want to continue with @Shortfall.Available questions?</MudText>
+    </DialogContent>
+    <DialogActions>
+        <DialogButtonComponent Submit="ContinueWithAvailable" Cancel="CancelDialog" buttonText="Continue" />
+    </DialogActions>
+</MudDialog>
+
+@code {
+    #region Properties
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter, EditorRequired] public BankCheck Shortfall { get; set; } = default!;
+    [Parameter] public bool IsFinalExam { get; set; }
+    #endregion
+
+    #region Methods
+    private void ContinueWithAvailable() {
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+
+    private void CancelDialog() {
+        MudDialog.Cancel();
+    }
+    #endregion
+}

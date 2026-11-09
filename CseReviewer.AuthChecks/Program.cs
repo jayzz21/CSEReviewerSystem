@@ -53,8 +53,8 @@ try {
     Check((await sa.GetAsync("/?view=multiplayer&code=AABBCCDDEE")).Headers.Location?.ToString()?.Contains("AABBCCDDEE") == true, "Shared lobby survives the signed-out front-page redirect");
     Check((await sa.GetAsync("/Multiplayer?code=AABBCCDDEE")).Headers.Location?.ToString() == "/Login?returnUrl=%2FMultiplayer%3Fcode%3DAABBCCDDEE", "Shared lobby survives the signed-out multiplayer page redirect");
     Check((await sa.GetAsync("/login.html?lobby=AABBCCDDEE")).Headers.Location?.ToString() == "/Login?returnUrl=%2FMultiplayer%3Fcode%3DAABBCCDDEE", "Old login address with a lobby code still reaches the lobby after sign-in");
-    Check((await sa.GetStringAsync("/Login")).Contains("id=\"login-form\""), "Login UI is served publicly");
-    Check((await sa.GetStringAsync("/Register")).Contains("id=\"register-form\""), "Registration UI is served publicly");
+    Check((await sa.GetStringAsync("/Login")).Contains("_framework/blazor.web.js"), "Login page is served publicly");
+    Check((await sa.GetStringAsync("/Register")).Contains("_framework/blazor.web.js"), "Registration page is served publicly");
     Check((await sa.GetAsync("/api/sets")).StatusCode == HttpStatusCode.Unauthorized, "Anonymous study access denied");
     Check((await sa.PostAsJsonAsync("/api/session", new { })).StatusCode == HttpStatusCode.Unauthorized, "Legacy POST session requires login instead of returning 405");
     var login = await sa.PostAsJsonAsync("/api/auth/login", new { login = "sa", password = "123" });

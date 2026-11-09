@@ -1,0 +1,17 @@
+<MudButton Variant="Variant.Text" Disabled="@Loading" OnClick="Cancel" StartIcon="@Icons.Material.Filled.Close">Cancel</MudButton>
+<MudButton Variant="Variant.Filled" Color="@buttonColor" Disabled="@Loading" OnClick="Submit" StartIcon="@(Loading ? null : Icons.Material.Filled.Check)">
+    @if (Loading) {
+        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+    }
+    @buttonText
+</MudButton>
+
+@code {
+    #region Properties
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public EventCallback Submit { get; set; }
+    [Parameter] public EventCallback Cancel { get; set; }
+    [Parameter] public string buttonText { get; set; } = "Save";
+    [Parameter] public Color buttonColor { get; set; } = Color.Primary;
+    #endregion
+}

@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
 using CseReviewer;
 using CseReviewer.Components;
+using MudBlazor.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 var connStr = builder.Configuration.GetConnectionString("Study") ?? "";
@@ -55,16 +56,12 @@ builder.Services.AddDataProtection().SetApplicationName("Husay.Accounts.v1").Per
 
 builder.Services.AddRateLimiter(o => {
     o.RejectionStatusCode = 429;
-    o.OnRejected = (context, _) => {
-        var http = context.HttpContext;
-        if (http.Request.Path.StartsWithSegments("/Account")) http.Response.Redirect(TooManyAttemptsPage(http.Request.Path));
-        return ValueTask.CompletedTask;
-    };
     o.AddPolicy("auth", c => RateLimitPartition.GetFixedWindowLimiter(c.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 });
 builder.Services.AddHttpClient<QuestionGenerator>(c => c.Timeout = TimeSpan.FromMinutes(5));
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddCascadingAuthenticationState();
+builder.Services.AddMudServices();
 builder.Services.AddScoped<AccountService>();
 builder.Services.AddScoped<CurrentUserAccessor>();
 builder.Services.AddScoped<PracticeService>();
@@ -115,7 +112,7 @@ app.Use(async (c, next) => {
     var isPageRequest = !path.StartsWithSegments("/api") && !path.StartsWithSegments("/_blazor") && !path.StartsWithSegments("/_framework") && !Path.HasExtension(path.Value);
     if (!isPageRequest) { await next(); return; }
     c.Response.Headers.CacheControl = "no-store";
-    var isPasswordSetupPath = path.StartsWithSegments("/Change-Password") || path.StartsWithSegments("/Account") || path.StartsWithSegments("/Logout");
+    var isPasswordSetupPath = path.StartsWithSegments("/Change-Password") || path.StartsWithSegments("/Logout");
     if (!isPasswordSetupPath && c.User.HasClaim("must_change_password", "true")) {
         c.Response.Redirect("/Change-Password?returnUrl=" + Uri.EscapeDataString(path + c.Request.QueryString));
         return;
@@ -135,7 +132,7 @@ app.UseAuthorization();
 app.UseRateLimiter();
 app.UseAntiforgery();
 Accounts.Map(app);
-AccountForms.Map(app);
+AccountRoutes.Map(app);
 app.MapGet("/api/config", () => new { categories = Catalog.Categories, provider = AiSettings.Provider(builder.Configuration), model = AiSettings.Model(builder.Configuration), configured = AiSettings.Configured(builder.Configuration) });
 var api = app.MapGroup("/api").RequireAuthorization();
 ImportedBank.Map(api);
@@ -155,12 +152,6 @@ api.MapPost("/sets/{id:guid}/answer", async (Guid id, AnswerRequest r, PracticeS
 app.Run();
 
 static string UserId(HttpContext c) => c.User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-
-static string TooManyAttemptsPage(PathString path) {
-    if (path.StartsWithSegments("/Account/Register")) return "/Register?error=toomany";
-    if (path.StartsWithSegments("/Account/ChangePassword")) return "/Change-Password?error=toomany";
-    return "/Login?error=toomany";
-}
 
 static string NormalizePostgresConnString(string conn) {
     if (conn.StartsWith("Host=", StringComparison.OrdinalIgnoreCase) ||

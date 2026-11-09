@@ -1,0 +1,25 @@
+@inject IJSRuntime JS
+
+<MudThemeProvider Theme="AppTheme.Theme" IsDarkMode="IsDarkMode" IsDarkModeChanged="ChangeDarkMode" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+@code {
+    #region Properties
+    [Parameter] public bool IsDarkMode { get; set; }
+    [Parameter] public EventCallback<bool> IsDarkModeChanged { get; set; }
+    #endregion
+
+    #region Lifecycle
+    protected override async Task OnAfterRenderAsync(bool firstRender) {
+        if (!firstRender) return;
+        var savedTheme = await JS.InvokeAsync<string?>("localStorage.getItem", AppTheme.DarkModeStorageKey);
+        if (savedTheme == "true") await IsDarkModeChanged.InvokeAsync(true);
+    }
+    #endregion
+
+    #region Methods
+    private Task ChangeDarkMode(bool isDarkMode) => IsDarkModeChanged.InvokeAsync(isDarkMode);
+    #endregion
+}

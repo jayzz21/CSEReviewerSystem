@@ -2,7 +2,7 @@
     <Found Context="routeData">
         <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(MainLayout)">
             <NotAuthorized>
-                <p>You do not have access to this page. <a href="/login.html">Sign in</a></p>
+                <p>You do not have access to this page. <MudLink Href="/Login">Sign in</MudLink></p>
             </NotAuthorized>
         </AuthorizeRouteView>
         <FocusOnNavigate RouteData="routeData" Selector="h1" />

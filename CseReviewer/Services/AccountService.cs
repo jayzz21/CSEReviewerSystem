@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CseReviewer;
 public record AccountSummary(string Id, string Username, string Email, string Role);
+public record EditUserResult(AccountSummary Account, bool PasswordChanged);
 public class AccountService(IDbContextFactory<StudyDb> dbFactory) {
     private static readonly PasswordHasher<AccountProfile> _hasher = new();
     private const string _usernamePattern = "^[a-z0-9_]{3,30}$";

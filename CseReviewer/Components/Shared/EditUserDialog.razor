@@ -1,0 +1,74 @@
+@using System.Text.RegularExpressions
+@inject AccountService Accounts
+@inject CurrentUserAccessor Users
+
+<MudDialog>
+    <DialogContent>
+        <MudTextField T="string" Label="Username" Variant="Variant.Outlined" @bind-Value="_username" Immediate="true" MaxLength="30"
+                      HelperText="3-30 letters, numbers or underscores." Disabled="@_isSubmitting" />
+        <MudSelect T="string" Label="Role" Variant="Variant.Outlined" @bind-Value="_role" Class="mt-3" Disabled="@_isSubmitting">
+            <MudSelectItem T="string" Value="@("User")" />
+            <MudSelectItem T="string" Value="@("Admin")" />
+        </MudSelect>
+        <MudTextField T="string" Label="New temporary password (optional)" Variant="Variant.Outlined" InputType="InputType.Password" @bind-Value="_password"
+                      Immediate="true" MaxLength="128" Class="mt-3" Disabled="@_isSubmitting"
+                      HelperText="Leave blank to keep the current password. A new password requires the user to change it at their next sign-in." />
+        @if (_error.Length > 0) {
+            <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Dense="true" Class="mt-3">@_error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <DialogButtonComponent Loading="@_isSubmitting" Submit="SaveUser" Cancel="CancelDialog" buttonText="Save changes" />
+    </DialogActions>
+</MudDialog>
+
+@code {
+    #region Properties
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter, EditorRequired] public AccountSummary Account { get; set; } = default!;
+    private string _username = "";
+    private string _role = "User";
+    private string _password = "";
+    private string _error = "";
+    private bool _isSubmitting;
+    #endregion
+
+    #region Lifecycle
+    protected override void OnInitialized() {
+        _username = Account.Username;
+        _role = Account.Role;
+    }
+    #endregion
+
+    #region Methods
+    private void CancelDialog() {
+        MudDialog.Cancel();
+    }
+
+    private string ValidateForm() {
+        if (!Regex.IsMatch(_username ?? "", "^[a-zA-Z0-9_]{3,30}$")) return "Use 3-30 letters, numbers or underscores for the username.";
+        if (_password.Length > 0 && (_password.Length < 12 || _password.Length > 128)) return "Use a temporary password of 12-128 characters, or leave it blank to keep the current password.";
+        return "";
+    }
+
+    private async Task SaveUser() {
+        if (_isSubmitting) return;
+        _error = ValidateForm();
+        if (_error.Length > 0) return;
+        _isSubmitting = true;
+        try {
+            var caller = await Users.Get();
+            var result = await Accounts.UpdateAccount(caller.Id, Account.Id, new UpdateAccount(_username, _role, _password));
+            if (!result.IsSuccess) {
+                _error = result.Error.Length > 0 ? result.Error : "You do not have permission to perform this action.";
+                return;
+            }
+            MudDialog.Close(DialogResult.Ok(new EditUserResult(result.Value!, _password.Length > 0)));
+        } catch (Exception ex) {
+            _error = ex.Message;
+        } finally {
+            _isSubmitting = false;
+        }
+    }
+    #endregion
+}

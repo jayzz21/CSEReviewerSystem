@@ -2,15 +2,13 @@
 
 **HTML import and offline database practice:** see [IMPORTING.md](IMPORTING.md). Drop your reviewer into the app to preview, import, and automatically save a randomized practice set. Future files can use the downloadable HTML/JSON template.
 
-ASP.NET Core 9 + Tailwind CSS 4 + Entity Framework Core + Microsoft SQL Server. A reviewer with topic-based AI generation via Groq (cloud) or Ollama (local), saved question sets, instant feedback, and worked numerical solutions.
+ASP.NET Core 9 + Blazor Server + MudBlazor 8 + Entity Framework Core + Microsoft SQL Server. A reviewer with topic-based AI generation via Groq (cloud) or Ollama (local), saved question sets, instant feedback, and worked numerical solutions.
 
 ## Run
 
-Requirements: .NET 9 SDK, Node.js/npm (only to rebuild CSS), and SQL Server LocalDB or SQL Server Express/Developer.
+Requirements: .NET 9 SDK and SQL Server LocalDB or SQL Server Express/Developer.
 
 ```powershell
-npm ci
-npm run css
 dotnet run --project CseReviewer --urls http://localhost:5080
 ```
 
@@ -90,7 +88,7 @@ With the app running, execute `powershell -File scripts/smoke.ps1`. It tests dat
 ## References
 
 - CSC scope: https://www.csc.gov.ph/more-than-400k-to-take-26-march-career-service-exam
-- Tailwind build: https://tailwindcss.com/docs/installation/tailwind-cli
+- MudBlazor: https://mudblazor.com/getting-started/installation
 - Ollama JSON generation: https://github.com/ollama/ollama/blob/main/docs/api.md
 - Groq JSON output: https://console.groq.com/docs/structured-outputs
 - Groq limits: https://console.groq.com/docs/rate-limits
